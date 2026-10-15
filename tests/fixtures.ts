@@ -1,0 +1,100 @@
+import type { McpToolResult, On } from 'claude-code'
+
+export type Recorded = { tool: string; args: Record<string, unknown> }
+
+export type FakeNotion = {
+  rows: Record<string, unknown>[]
+  pageStatus: string
+  calls: Recorded[]
+}
+
+const SCHEMA = {
+  schema: {
+    'タスク/プロジェクト名': { type: 'title' },
+    'ステータス': {
+      type: 'status',
+      groups: { to_do: [{ name: '未着手' }], in_progress: [{ name: '進行中' }], complete: [{ name: '完了' }] },
+    },
+    '優先順位': { type: 'select', options: [{ name: '高' }, { name: '中' }, { name: '低' }] },
+    'カテゴリー': { type: 'select', options: [{ name: '仕事' }] },
+    '案件タグ': {
+      type: 'multi_select',
+      options: [
+        { name: 'DemoCLI', color: 'purple' },
+        { name: 'SampleApp', color: 'gray' },
+      ],
+    },
+    '人間ラベル': { type: 'status', groups: { to_do: [{ name: 'AI' }], in_progress: [{ name: '人間' }] } },
+    '開始日': { type: 'date' },
+    '終了日': { type: 'date' },
+  },
+}
+
+export function row(id: string, title: string, status: string, end: string): Record<string, unknown> {
+  return {
+    url: `https://app.notion.com/p/${id}`,
+    'タスク/プロジェクト名': title,
+    'ステータス': status,
+    '案件タグ': '["DemoCLI"]',
+    'date:終了日:start': end,
+  }
+}
+
+function reply(value: unknown): McpToolResult {
+  return { content: [{ type: 'text', text: JSON.stringify(value) }], isError: false }
+}
+
+function answer(fake: FakeNotion, tool: string, args: Record<string, unknown>): McpToolResult {
+  if (tool === 'notion-query-data-sources') return reply({ results: fake.rows, has_more: false })
+  if (tool === 'notion-fetch' && String(args['id']).startsWith('collection://')) {
+    return reply({ text: `<data-source-state>\n${JSON.stringify(SCHEMA)}\n</data-source-state>` })
+  }
+  if (tool === 'notion-update-data-source') return reply({ text: String(args['statements']) })
+  if (tool === 'notion-fetch') {
+    return reply({ text: `<properties>\n${JSON.stringify({ 'ステータス': fake.pageStatus })}\n</properties>` })
+  }
+  return reply({})
+}
+
+// Stands in for the Notion connector and git beneath the plugin, recording
+// every call so a test can check what would have been written.
+export function fakeNotion(on: On, fake: FakeNotion, branch: string): void {
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('mcp.call', (_$, e) => {
+    fake.calls.push({ tool: e.tool, args: e.args })
+    return { value: answer(fake, e.tool, e.args) }
+  })
+  on('process.run', () => ({
+    value: {
+      exitCode: 0,
+      stdout: `${branch}\n`,
+      stderr: '',
+      isStdoutTruncated: false,
+      isStderrTruncated: false,
+    },
+  }))
+}
+
+export const RUN = {
+  command: 'devlog',
+  origin: { kind: 'composer' as const },
+  presentation: { isFullscreen: false, columns: 120 },
+}
+
+export const BAND = {
+  plugin: 'notion-backlog',
+  component: 'AbovePrompt' as const,
+  props: {
+    hasSurvey: false,
+    isWorking: false,
+    maxRows: 6,
+    bodyColumns: 100,
+    scroll: { offset: 0, bodyRows: 6 },
+    view: {},
+  },
+}
+
+// Every test names a DB explicitly: the published manifest ships with none.
+export const OPTS = { options: { dataSource: 'collection://00000000-0000-0000-0000-000000000000' } }

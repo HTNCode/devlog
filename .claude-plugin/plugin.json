@@ -1,0 +1,94 @@
+{
+  "name": "notion-backlog",
+  "version": "0.2.0",
+  "description": "Notion の課題 DB を土台にした Backlog 風チケット管理（/devlog: 課題一覧ペイン、要約、現在の課題の帯、ガントチャート、Git 連動、添付。Notion への書き込みは確定ボタン経由）",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "dataSource": {
+      "type": "string",
+      "title": "Notion の DB",
+      "description": "課題 DB の URL、または collection:// の ID（必須）",
+      "default": ""
+    },
+    "server": {
+      "type": "string",
+      "title": "Notion の MCP サーバー名",
+      "description": "/mcp に出る名前",
+      "default": "claude.ai Notion"
+    },
+    "propTitle": {
+      "type": "string",
+      "title": "件名のプロパティ名",
+      "description": "タイトル型",
+      "default": "タスク/プロジェクト名"
+    },
+    "propStatus": {
+      "type": "string",
+      "title": "状態のプロパティ名",
+      "description": "ステータス型",
+      "default": "ステータス"
+    },
+    "propPriority": {
+      "type": "string",
+      "title": "優先度のプロパティ名",
+      "description": "セレクト型",
+      "default": "優先順位"
+    },
+    "propCategory": {
+      "type": "string",
+      "title": "カテゴリーのプロパティ名",
+      "description": "セレクト型",
+      "default": "カテゴリー"
+    },
+    "propTags": {
+      "type": "string",
+      "title": "案件タグのプロパティ名",
+      "description": "マルチセレクト型",
+      "default": "案件タグ"
+    },
+    "propOwner": {
+      "type": "string",
+      "title": "担当ラベルのプロパティ名",
+      "description": "ステータス型（例: AI / 人間）",
+      "default": "人間ラベル"
+    },
+    "propStart": {
+      "type": "string",
+      "title": "開始日のプロパティ名",
+      "description": "日付型",
+      "default": "開始日"
+    },
+    "propEnd": {
+      "type": "string",
+      "title": "終了日のプロパティ名",
+      "description": "日付型",
+      "default": "終了日"
+    },
+    "statusTodo": {
+      "type": "string",
+      "title": "未着手の状態名",
+      "description": "状態プロパティの選択肢",
+      "default": "未着手"
+    },
+    "statusDoing": {
+      "type": "string",
+      "title": "進行中の状態名",
+      "description": "状態プロパティの選択肢",
+      "default": "進行中"
+    },
+    "statusDone": {
+      "type": "string",
+      "title": "完了の状態名",
+      "description": "状態プロパティの選択肢",
+      "default": "完了"
+    },
+    "ownerHuman": {
+      "type": "string",
+      "title": "人の担当を示すラベル",
+      "description": "担当ラベルの選択肢",
+      "default": "人間"
+    }
+  },
+  "license": "Unlicense",
+  "repository": "https://github.com/HTNCode/devlog"
+}
