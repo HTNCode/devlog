@@ -1,6 +1,7 @@
 import type { EngineInterface, On } from 'claude-code'
 
 import type { Issue, Summary } from '../types'
+import { errorText } from './errors'
 import { readPage } from './notion'
 import { getOpenSummary, getSummaries, PANE, setOpenSummary, setSummaries } from './state'
 
@@ -28,7 +29,7 @@ async function generate($: EngineInterface, issue: Issue): Promise<void> {
     const text = reply.isAnswered ? reply.text.trim() : `要約を作れませんでした (${reply.reason})`
     await setSummaries($, list => put(list, { pageId, status: reply.isAnswered ? 'ready' : 'error', text }))
   } catch (error) {
-    const text = error instanceof Error ? error.message : String(error)
+    const text = errorText(error)
     await setSummaries($, list => put(list, { pageId, status: 'error', text }))
   }
 }

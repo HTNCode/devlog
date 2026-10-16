@@ -2,6 +2,7 @@ import type { EngineInterface } from 'claude-code'
 
 import type { Draft, Issue, Schema, TagOption } from '../types'
 import { CONFIG, dataSourceUrl, isConfigured, NOT_CONFIGURED } from './config'
+import { Notice, notionError } from './errors'
 import { composeTitle, draftTag, isSafeName, STATUS } from './keys'
 import type { PageSnapshot } from './parse'
 import { fetchedText, parseIssues, parseJson, parsePage, parsePageStatus, parseSchema, PROP } from './parse'
@@ -9,10 +10,10 @@ import { fetchedText, parseIssues, parseJson, parsePage, parsePageStatus, parseS
 const LIST_LIMIT = 100
 
 export async function callJson($: EngineInterface, tool: string, args: Record<string, unknown>): Promise<unknown> {
-  if (!isConfigured()) throw new Error(NOT_CONFIGURED)
+  if (!isConfigured()) throw new Notice(NOT_CONFIGURED)
   const result = await $.mcp.call(CONFIG.server, tool, args)
   const text = result.content.find(block => block.type === 'text')?.text ?? ''
-  if (result.isError) throw new Error(`${tool}: ${text.slice(0, 200)}`)
+  if (result.isError) throw notionError(tool, text)
   const parsed = parseJson(text)
   return parsed === undefined ? { text } : parsed
 }
@@ -74,7 +75,7 @@ const COLOR = /^[a-z_]+$/
 export async function addTagOption($: EngineInterface, existing: readonly TagOption[], name: string): Promise<void> {
   const isListSafe = existing.every(option => isSafeName(option.name) && COLOR.test(option.color))
   if (existing.length === 0 || !isListSafe || !isSafeName(name)) {
-    throw new Error('案件タグの既存の選択肢を安全に引き継げないため、追加を中止しました。Notion で追加してください')
+    throw new Notice('案件タグの既存の選択肢を安全に引き継げないため、追加を中止しました。Notion で追加してください')
   }
   const options = [...existing, { name, color: 'default' }]
     .map(option => `'${option.name}':${option.color}`)
@@ -83,7 +84,7 @@ export async function addTagOption($: EngineInterface, existing: readonly TagOpt
     data_source_id: dataSourceUrl(),
     statements: `ALTER COLUMN "${PROP.tags}" SET MULTI_SELECT(${options})`,
   })
-  if (!fetchedTextIncludes(reply, name)) throw new Error(`案件タグ「${name}」を追加できませんでした`)
+  if (!fetchedTextIncludes(reply, name)) throw new Notice(`案件タグ「${name}」を追加できませんでした`)
 }
 
 function fetchedTextIncludes(reply: unknown, name: string): boolean {

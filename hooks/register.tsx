@@ -10,6 +10,7 @@ import { registerGantt } from './pane-gantt'
 import { todayJst } from './keys'
 import { createView } from './pane-create'
 import { listView } from './pane-list'
+import { errorText } from './errors'
 import {
   getAttachments,
   getOpenSummary,
@@ -31,8 +32,15 @@ async function answer($: EngineInterface, e: CommandRunInput) {
   try {
     return { text: await runCommand($, e.args, e.presentation) }
   } catch (error) {
-    return { text: `notion-backlog: ${error instanceof Error ? error.message : String(error)}` }
+    return { text: `notion-backlog: ${errorText(error)}` }
   }
+}
+
+// load() keeps every Notion failure in state for the pane and the band;
+// what can still reject a background refresh is the state write itself,
+// which has no place on screen, so it goes to the debug log.
+function logBackground($: EngineInterface, error: unknown): void {
+  $.ui.log(`notion-backlog: 背景の読み込みに失敗しました: ${errorText(error)}`, { to: 'debug' })
 }
 
 export const register: Register = (on, options) => {
@@ -54,7 +62,7 @@ export const register: Register = (on, options) => {
       immediate: true,
     })
     void refreshBranch($)
-    void refresh($).catch(() => undefined)
+    void refresh($).catch(error => logBackground($, error))
     return next(e)
   })
 
@@ -65,7 +73,7 @@ export const register: Register = (on, options) => {
     const result = await next(e)
     if (e.agentId === undefined) {
       void refreshBranch($)
-      void refreshIfStale($).catch(() => undefined)
+      void refreshIfStale($).catch(error => logBackground($, error))
     }
     return result
   })

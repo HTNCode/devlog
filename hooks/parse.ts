@@ -1,5 +1,6 @@
 import type { Issue, Schema, TagOption } from '../types'
 import { CONFIG } from './config'
+import { Notice } from './errors'
 import { keyFromTitle } from './keys'
 
 // Notion's replies arrive as JSON text with no schema library available in
@@ -62,7 +63,7 @@ export function parseIssue(row: unknown): Issue | null {
 
 export function parseIssues(reply: unknown): Issue[] {
   if (!isRecord(reply) || !Array.isArray(reply['results'])) {
-    throw new Error('課題一覧の応答を読めませんでした')
+    throw new Notice('課題一覧の応答を読めませんでした')
   }
   return reply['results'].map(parseIssue).filter((issue): issue is Issue => issue !== null)
 }
@@ -75,7 +76,7 @@ function between(text: string, tag: string): unknown {
 // A fetch reply is `{ text }` whose text wraps the JSON of interest in tags.
 export function fetchedText(reply: unknown): string {
   if (isRecord(reply) && typeof reply['text'] === 'string') return reply['text']
-  throw new Error('Notion の fetch 応答を読めませんでした')
+  throw new Notice('Notion の fetch 応答を読めませんでした')
 }
 
 export function parsePageStatus(reply: unknown): string | null {

@@ -3,6 +3,7 @@ import type { EngineInterface } from 'claude-code'
 import type { Draft, Pending, Schema } from '../types'
 import { confirmUpload } from './attach'
 import { CONFIG } from './config'
+import { errorText } from './errors'
 import { confirmDates } from './gantt-actions'
 import { draftTag, keyFromBranch, missingFields } from './keys'
 import { addTagOption, createIssue, fetchSchema, listOpenIssues, readStatus, updateStatus } from './notion'
@@ -27,7 +28,7 @@ import {
 export const STALE_MS = 5 * 60 * 1000
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return errorText(error)
 }
 
 // Callers that arrive while a load runs share it instead of returning
