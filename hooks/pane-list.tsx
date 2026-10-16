@@ -9,7 +9,7 @@ import type { AttachUi } from './pane-attach'
 import { attachSection } from './pane-attach'
 import { setPending, setTab, setView } from './state'
 import { summaryBlock } from './pane-summary'
-import { toggleSummary } from './summary'
+import { closePane, toggleSummary } from './summary'
 import { startWork } from './work'
 
 export type Ui = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button' | 'Link' | 'Input' | 'Select'>
@@ -166,6 +166,9 @@ export function listView($: EngineInterface, ui: AttachUi, data: ListData, openC
             起票
           </Button>
         )}
+        <Button key="close" dimColor hotkey="q" onPress={() => void closePane($)}>
+          閉じる
+        </Button>
       </Box>
       {status !== null && <Text dimColor>{status}</Text>}
       {data.pending !== null && data.pending.kind !== 'create' && confirmRow($, ui, data.pending)}

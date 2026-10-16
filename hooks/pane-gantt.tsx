@@ -7,6 +7,7 @@ import { proposeDates } from './gantt-actions'
 import { todayJst } from './keys'
 import { confirmRow, loadLine } from './pane-list'
 import { getIssues, getLoad, getPending, getSchema, getSelected, getView, PANE, setSelected, setView } from './state'
+import { closePane } from './summary'
 
 type BaseUi = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'>
 
@@ -131,8 +132,11 @@ export function registerGantt(on: On): void {
     return (
       <Box flexDirection="column">
         <Box gap={1}>
-          <Button key="gantt-back" dimColor hotkey="q" onPress={() => void setView($, () => 'list' as const)}>
+          <Button key="gantt-back" dimColor hotkey="g" onPress={() => void setView($, () => 'list' as const)}>
             一覧へ
+          </Button>
+          <Button key="gantt-close" dimColor hotkey="q" onPress={() => void closePane($)}>
+            閉じる
           </Button>
           <Text dimColor wrap="truncate-end">
             クリックで選択、左右キーで期限、shift+左右で期間、Enter で提案

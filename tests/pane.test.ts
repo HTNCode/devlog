@@ -88,3 +88,16 @@ test('a new 案件タグ keeps every existing option and its color', OPTS, async
   expect(JSON.stringify(created?.args)).toContain('【新案件】初期設定')
   await ui.unmount()
 })
+
+test('a bare /devlog or /dl toggles the pane, and q closes it', OPTS, async ($, on) => {
+  mock.clock(on, { now: NOW })
+  const closes: string[] = []
+  fakeNotion(on, { ...fake(), closes }, 'main')
+  expect((await $.command.run({ ...RUN, args: '' })).text ?? '').toContain('課題ペインを開きました')
+  expect((await $.command.run({ ...RUN, command: 'dl', args: '' })).text ?? '').toContain('課題ペインを閉じました')
+  await $.command.run({ ...RUN, command: 'dl', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'close' })
+  expect(closes).toEqual(['plugin', 'plugin'])
+  await ui.unmount()
+})
