@@ -64,6 +64,7 @@ export type Pending =
       toEnd: string
     }
   | { kind: 'upload'; pageId: string; label: string; path: string; name: string; size: number }
+  | { kind: 'setup'; title: string; parentId: string | null }
 
 export type Load = {
   isLoading: boolean

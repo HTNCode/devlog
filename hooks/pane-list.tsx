@@ -52,6 +52,8 @@ function describe(pending: Pending): string {
       return `${pending.label}: ${shortDate(pending.fromStart)}〜${shortDate(pending.fromEnd)} → ${shortDate(pending.toStart)}〜${shortDate(pending.toEnd)}`
     case 'upload':
       return `添付: ${pending.name} (${Math.ceil(pending.size / 1024)} KB) → ${pending.label}`
+    case 'setup':
+      return `Notion に課題 DB「${pending.title}」を作成（${pending.parentId === null ? 'ワークスペース直下・非公開' : `ページ ${pending.parentId} の下`}）`
   }
 }
 

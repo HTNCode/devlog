@@ -2,6 +2,8 @@ import type { McpToolResult, On, UiPane } from 'claude-code'
 
 export type Recorded = { tool: string; args: Record<string, unknown> }
 
+export const CREATED_DB = 'collection://11111111-2222-3333-4444-555555555555'
+
 export type FakeNotion = {
   rows: Record<string, unknown>[]
   pageStatus: string
@@ -54,6 +56,7 @@ function answer(fake: FakeNotion, tool: string, args: Record<string, unknown>): 
     return reply({ text: `<data-source-state>\n${JSON.stringify(SCHEMA)}\n</data-source-state>` })
   }
   if (tool === 'notion-update-data-source') return reply({ text: String(args['statements']) })
+  if (tool === 'notion-create-database') return reply({ text: `<data-source url="{{${CREATED_DB}}}">` })
   if (tool === 'notion-fetch') {
     return reply({ text: `<properties>\n${JSON.stringify({ 'ステータス': fake.pageStatus })}\n</properties>` })
   }
@@ -113,6 +116,25 @@ export function fakeHost(on: On, fake: FakeNotion, branch: string): void {
       isStderrTruncated: false,
     },
   }))
+}
+
+// Stands in for the settings menu: a row for each option the plugin saves,
+// and every write kept as key=value.
+export function fakeConfig(on: On, saved: string[]): void {
+  on('config.list', () => ({
+    value: ['dataSource', 'server'].map(field => ({
+      key: `notion-backlog.${field}`,
+      label: field,
+      kind: 'text' as const,
+      value: '',
+      provider: { plugin: 'notion-backlog', tier: 'user' as const },
+      isLocked: false,
+    })),
+  }))
+  on('config.set', (_$, e) => {
+    saved.push(`${e.key}=${String(e.value)}`)
+    return { value: e.value }
+  })
 }
 
 export const RUN = {

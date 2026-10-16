@@ -11,6 +11,11 @@ const LIST_LIMIT = 100
 
 export async function callJson($: EngineInterface, tool: string, args: Record<string, unknown>): Promise<unknown> {
   if (!isConfigured()) throw new Notice(NOT_CONFIGURED)
+  return callTool($, tool, args)
+}
+
+// Reaches Notion before any DB is set: only setup, which creates that DB.
+export async function callTool($: EngineInterface, tool: string, args: Record<string, unknown>): Promise<unknown> {
   const result = await $.mcp.call(CONFIG.server, tool, args)
   const text = result.content.find(block => block.type === 'text')?.text ?? ''
   if (result.isError) throw notionError(tool, text)
@@ -43,6 +48,20 @@ export async function listOpenIssues($: EngineInterface): Promise<Issue[]> {
     },
   })
   return parseIssues(reply)
+}
+
+// The data source a database's fetch names in its <data-source> tag, the
+// first one for a database with several. Searched in the reply as JSON,
+// where the tag's quote is escaped, and from the <data-sources> list on
+// when the reply has one: text above it (a description anyone may edit)
+// could carry a tag of its own.
+const DATA_SOURCE_TAG =
+  /<data-source url=\\?"(?:\{\{)?collection:\/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
+
+export function dataSourceIn(reply: unknown): string | null {
+  const text = JSON.stringify(reply)
+  const list = text.indexOf('<data-sources>')
+  return DATA_SOURCE_TAG.exec(list === -1 ? text : text.slice(list))?.[1]?.toLowerCase() ?? null
 }
 
 export async function fetchSchema($: EngineInterface): Promise<Schema> {

@@ -7,6 +7,7 @@ import { errorText } from './errors'
 import { confirmDates } from './gantt-actions'
 import { draftTag, keyFromBranch, missingFields } from './keys'
 import { addTagOption, createIssue, fetchSchema, listOpenIssues, readStatus, updateStatus } from './notion'
+import { confirmSetup } from './setup'
 import {
   getLoad,
   getPending,
@@ -112,7 +113,7 @@ async function confirmCreate($: EngineInterface, draft: Draft): Promise<string> 
   return `「${draft.title.trim()}」を起票しました`
 }
 
-function confirmByKind($: EngineInterface, pending: Pending): Promise<string> {
+function confirmByKind($: EngineInterface, pending: Exclude<Pending, { kind: 'setup' }>): Promise<string> {
   switch (pending.kind) {
     case 'status':
       return confirmStatus($, pending)
@@ -125,12 +126,30 @@ function confirmByKind($: EngineInterface, pending: Pending): Promise<string> {
   }
 }
 
+// A second press while a confirm runs is dropped before anything awaits:
+// isWriting alone is read after an await, so two presses could both pass
+// it and write twice (two DBs from one setup). The module's own flag; a
+// reload, which only an option save causes, ends the confirm anyway.
+let isConfirming = false
+
 // The only path that writes to Notion: it runs from a confirm button the
 // person pressed, never from a model turn.
 export async function confirmPending($: EngineInterface): Promise<void> {
+  if (isConfirming) return
+  isConfirming = true
+  try {
+    await runConfirm($)
+  } finally {
+    isConfirming = false
+  }
+}
+
+async function runConfirm($: EngineInterface): Promise<void> {
   const pending = await getPending($)
   const load = await getLoad($)
   if (pending === null || load.isWriting) return
+  // Setup ends by saving dataSource, which reloads this module mid-call.
+  if (pending.kind === 'setup') return confirmSetup($, pending)
   await setLoad($, l => ({ ...l, isWriting: true }))
   try {
     $.ui.toast(await confirmByKind($, pending))

@@ -3,6 +3,7 @@ import type { CommandPresentation, EngineInterface } from 'claude-code'
 import type { Tab } from '../types'
 import { emptyDraft, refresh, refreshIfStale } from './actions'
 import { addDays, filterTab, shortDate, todayJst } from './keys'
+import { requestSetup } from './setup'
 import { getIssues, getLoad, getSchema, PANE, setDraft, setPending, setView } from './state'
 
 const DEFAULT_DAYS = 2
@@ -75,10 +76,14 @@ async function reload($: EngineInterface): Promise<string> {
 // A bare /devlog toggles the pane; the words after it open a view or answer
 // in text.
 export async function runCommand($: EngineInterface, args: string, presentation: CommandPresentation): Promise<string> {
-  const word = args.trim().split(/\s+/)[0] ?? ''
+  const [word = '', ...rest] = args.trim().split(/\s+/)
   const tab = TAB_ARGS[word]
   if (tab !== undefined) return textList($, tab)
   if (word === 'refresh') return reload($)
+  if (word === 'setup') {
+    const setup = await requestSetup($, rest.join(' '))
+    return setup.isAsked ? `${await openPane($, presentation)}。${setup.text}` : setup.text
+  }
   if (word === '' && (await isPaneOpen($))) {
     await $.ui.close({ id: PANE })
     return '課題ペインを閉じました'

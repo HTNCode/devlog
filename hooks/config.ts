@@ -1,4 +1,4 @@
-import type { PluginOptions } from 'claude-code'
+import type { EngineInterface, PluginOptions } from 'claude-code'
 
 // Everything that names one person's Notion DB: the MCP server that reaches
 // it, its data source, its property names and the option values the mod
@@ -83,4 +83,18 @@ export function dataSourceUrl(): string {
 }
 
 export const NOT_CONFIGURED =
-  'Notion の DB が未設定です。/config で notion-backlog の dataSource に DB の URL か ID を入れてください'
+  'Notion の DB が未設定です。/devlog setup で新しく作るか、/config で notion-backlog の dataSource に DB の ID を入れてください'
+
+const PLUGIN = 'notion-backlog'
+
+// Saves one of this plugin's options as the /config menu would; the module
+// then reloads with it, so the caller makes this its last step. The row is
+// looked up, not spelled out: its key is the engine's to name. Answers
+// whether it was saved; an engine failure rejects.
+export async function saveOption($: EngineInterface, field: string, value: string): Promise<boolean> {
+  const rows = await $.config.list()
+  const row = rows.find(one => one.provider.plugin === PLUGIN && one.key.endsWith(`.${field}`))
+  if (row === undefined) return false
+  const result = await $.config.set({ key: row.key, value })
+  return result.deny === undefined
+}
