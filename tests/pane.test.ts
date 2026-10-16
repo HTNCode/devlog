@@ -101,3 +101,17 @@ test('a bare /devlog or /dl toggles the pane, and q closes it', OPTS, async ($, 
   expect(closes).toEqual(['plugin', 'plugin'])
   await ui.unmount()
 })
+
+test('a pane closed on the gantt reopens at the gantt width', OPTS, async ($, on) => {
+  mock.clock(on, { now: NOW })
+  const opens: number[] = []
+  fakeNotion(on, { ...fake(), opens }, 'main')
+  await $.command.run({ ...RUN, args: 'gantt' })
+  await $.command.run({ ...RUN, args: '' })
+  await $.command.run({ ...RUN, args: '' })
+  expect(opens.length).toBe(2)
+  expect(opens[1]).toBe(opens[0])
+  // The opens left loads running; this joins them before the test ends.
+  await $.command.run({ ...RUN, args: 'refresh' })
+})
+

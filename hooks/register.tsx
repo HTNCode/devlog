@@ -26,7 +26,7 @@ import {
   PANE,
 } from './state'
 
-const ARGUMENT_HINT = '[new | setup | list | week | doing | human | refresh]'
+const ARGUMENT_HINT = '[gantt | new | setup | list | week | doing | human | refresh]'
 
 async function answer($: EngineInterface, e: CommandRunInput) {
   try {

@@ -3,11 +3,12 @@ import type { Elements, EngineInterface } from 'claude-code'
 import type { Attachments, Issue, Load, Pending, Schema, Summary, Tab } from '../types'
 import { cancelPending, confirmPending, refresh, selectIssue } from './actions'
 import { openAttachments } from './attach'
+import { showGantt } from './command'
 import { CONFIG } from './config'
 import { filterTab, isOverdue, shortDate } from './keys'
 import type { AttachUi } from './pane-attach'
 import { attachSection } from './pane-attach'
-import { setPending, setTab, setView } from './state'
+import { setPending, setTab } from './state'
 import { summaryBlock } from './pane-summary'
 import { closePane, toggleSummary } from './summary'
 import { startWork } from './work'
@@ -157,7 +158,7 @@ export function listView($: EngineInterface, ui: AttachUi, data: ListData, openC
             {tab === 'human' ? CONFIG.humanOwner : name}
           </Button>
         ))}
-        <Button key="tab-gantt" hotkey="g" onPress={() => void setView($, () => 'gantt' as const)}>
+        <Button key="tab-gantt" hotkey="g" onPress={() => void showGantt($)}>
           ガント
         </Button>
         <Button key="refresh" dimColor hotkey="r" onPress={() => void refresh($, true)}>

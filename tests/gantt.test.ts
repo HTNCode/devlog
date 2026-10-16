@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { McpToolResult, On } from 'claude-code'
 
-import { barSegments, dayDiff, ganttLayout, ganttRows, headerLine, shiftDates } from '../hooks/gantt'
+import { dayDiff, dayLine, ganttLayout, ganttRows, headerLine, rowLabel, rowRuns, shiftDates } from '../hooks/gantt'
 import type { Issue } from '../types'
 import type { FakeNotion, Recorded } from './fixtures'
 import { fakeNotion, row, RUN } from './fixtures'
@@ -44,6 +44,8 @@ function reply(value: unknown): { value: McpToolResult } {
 // A Notion whose page carries 開始日 and 終了日, which fixtures.ts does not.
 function datedNotion(on: On, calls: Recorded[], pageEnd: string): void {
   const dated = { ...row(SEK, '【DemoCLI】SEK-08 CLI 挙動', '進行中', '2026-10-14'), 'date:開始日:start': '2026-10-12' }
+  // Switching to the gantt re-opens the pane to widen it.
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
   on('mcp.call', (_$, e) => {
     calls.push({ tool: e.tool, args: e.args })
     if (e.tool === 'notion-query-data-sources') return reply({ results: [dated] })
@@ -69,11 +71,33 @@ function issue(over: Partial<Issue>): Issue {
 
 describe('gantt layout', () => {
   test('fits the range to the width, narrow panes included', () => {
-    expect(ganttLayout(64, '2026-10-15')).toEqual({ from: '2026-10-12', days: 25, cellsPerDay: 2, labelWidth: 12, todayOffset: 3 })
+    expect(ganttLayout(64, '2026-10-15')).toEqual({
+      from: '2026-10-12',
+      days: 22,
+      cellsPerDay: 2,
+      labelWidth: 18,
+      todayOffset: 3,
+      weekStarts: [0, 7, 14, 21],
+    })
     const narrow = ganttLayout(40, '2026-10-15')
-    expect(narrow.labelWidth).toBe(8)
+    expect(narrow.labelWidth).toBe(10)
     expect(narrow.labelWidth + 1 + narrow.days * narrow.cellsPerDay <= 40).toBe(true)
     expect(headerLine(narrow).length).toBe(narrow.days * narrow.cellsPerDay)
+    expect(dayLine(narrow)).toBe(null)
+  })
+
+  test('a wide pane gives titles more room and every day its date', () => {
+    const wide = ganttLayout(120, '2026-10-15')
+    expect(wide.labelWidth).toBe(30)
+    expect(wide.cellsPerDay).toBe(3)
+    expect(wide.labelWidth + 1 + wide.days * wide.cellsPerDay <= 120).toBe(true)
+    expect((dayLine(wide) ?? '').startsWith(' 12 13 14 15')).toBe(true)
+    expect(headerLine(wide).startsWith('10/12')).toBe(true)
+  })
+
+  test('labels lead with the key and drop the 案件 prefix', () => {
+    expect(rowLabel({ key: 'SEK-08', title: '【DemoCLI】SEK-08 CLI 挙動' })).toBe('SEK-08 CLI 挙動')
+    expect(rowLabel({ key: null, title: '【Rekmemo】PRD作成' })).toBe('PRD作成')
   })
 
   test('turns dates into day offsets, earliest due first', () => {
@@ -83,13 +107,20 @@ describe('gantt layout', () => {
       '2026-10-12',
     )
     expect(rows.map(r => r.id)).toEqual(['a', 'b'])
-    expect(rows[0]).toEqual({ id: 'a', label: 'SEK-08', start: 1, end: 2, color: 'error' })
+    expect(rows[0]).toEqual({ id: 'a', label: 'SEK-08 t', start: 1, end: 2, color: 'error' })
+    expect(rows[1]?.color).toBe('inactive')
     expect(dayDiff('2026-10-12', '2026-10-20')).toBe(8)
   })
 
-  test('draws the bar and the today mark', () => {
-    const layout = { from: '2026-10-12', days: 6, cellsPerDay: 1, labelWidth: 8, todayOffset: 3 }
-    expect(barSegments(1, 3, layout)).toEqual(['·', '██▓', '··'])
+  test('draws the bar, the today mark and the week start', () => {
+    const layout = { from: '2026-10-12', days: 6, cellsPerDay: 1, labelWidth: 8, todayOffset: 3, weekStarts: [5] }
+    expect(rowRuns(1, 3, layout)).toEqual([
+      { kind: 'empty', text: '·' },
+      { kind: 'bar', text: '██' },
+      { kind: 'barToday', text: '▓' },
+      { kind: 'empty', text: '·' },
+      { kind: 'week', text: '┊' },
+    ])
   })
 
   test('shifts dates without letting the end pass the start', () => {
