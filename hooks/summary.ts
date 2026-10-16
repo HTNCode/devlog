@@ -1,6 +1,7 @@
 import type { EngineInterface, On } from 'claude-code'
 
 import type { Issue, Summary } from '../types'
+import { errorText } from './errors'
 import { readPage } from './notion'
 import { getOpenSummary, getSummaries, PANE, setOpenSummary, setSummaries } from './state'
 
@@ -28,7 +29,7 @@ async function generate($: EngineInterface, issue: Issue): Promise<void> {
     const text = reply.isAnswered ? reply.text.trim() : `要約を作れませんでした (${reply.reason})`
     await setSummaries($, list => put(list, { pageId, status: reply.isAnswered ? 'ready' : 'error', text }))
   } catch (error) {
-    const text = error instanceof Error ? error.message : String(error)
+    const text = errorText(error)
     await setSummaries($, list => put(list, { pageId, status: 'error', text }))
   }
 }
@@ -49,8 +50,15 @@ export async function toggleSummary($: EngineInterface, issue: Issue): Promise<v
   if (cached === undefined || cached.status === 'error') await generate($, issue)
 }
 
-// Esc on the pane closes an open summary first and keeps the pane; the next
-// Esc closes the pane as usual.
+// The close button and q: an open summary closes first, then the pane.
+export async function closePane($: EngineInterface): Promise<void> {
+  if ((await getOpenSummary($)) !== null) return closeSummary($)
+  await $.ui.close({ id: PANE })
+}
+
+// The pane's own close mark behaves as closePane does. Esc only hands the
+// keys back: the pane is opened without closeOnEscape, because the same key
+// at the prompt interrupts a running turn.
 export function registerSummary(on: On): void {
   on('ui.close', async ($, e, next) => {
     if (e.id !== PANE || e.origin.kind !== 'person' || (await getOpenSummary($)) === null) return next(e)

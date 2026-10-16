@@ -13,6 +13,7 @@ import {
 } from './attach-files'
 import { callJson, readPage } from './notion'
 import { parseJson } from './parse'
+import { errorText, Notice } from './errors'
 import { getAttachments, setAttachments, setPending } from './state'
 
 const UPLOAD_HOST = 'https://api.notion.com/'
@@ -22,7 +23,7 @@ const MAX_DOWNLOAD_BYTES = '52428800'
 const MAX_SUFFIX = 50
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return errorText(error)
 }
 
 function issueLabel(issue: Issue): string {
@@ -91,12 +92,12 @@ function uploadArgs(reply: unknown, path: string): string[] {
   const field = findField(reply, 'upload_form_field') ?? 'file'
   const headers = typeof reply === 'object' && reply !== null ? Reflect.get(reply, 'upload_headers') : undefined
   if (url === null || !url.startsWith(UPLOAD_HOST) || !FORM_FIELD.test(field)) {
-    throw new Error('アップロード先の応答を読めませんでした')
+    throw new Notice('アップロード先の応答を読めませんでした')
   }
   const headerArgs = Object.entries(typeof headers === 'object' && headers !== null ? headers : {}).flatMap(
     ([name, value]) => {
       if (typeof value !== 'string' || !HEADER_NAME.test(name) || /[\r\n]/.test(value)) {
-        throw new Error('アップロード用のヘッダが不正です')
+        throw new Notice('アップロード用のヘッダが不正です')
       }
       return ['-H', `${name}: ${value}`]
     },
@@ -114,9 +115,9 @@ export async function confirmUpload($: EngineInterface, pending: Extract<Pending
   if (!isSafeUploadPath(pending.path)) return 'このパスは使えないため、アップロードを中止しました'
   const created = await callJson($, 'notion-create-file-upload', { filename: sanitizeFileName(pending.name) })
   const ran = await $.process.run(uploadArgs(created, pending.path), { timeoutMs: 120000 })
-  if (ran.exitCode !== 0) throw new Error(`アップロードに失敗しました: ${(ran.stderr || ran.stdout).slice(0, 200)}`)
+  if (ran.exitCode !== 0) throw new Notice(`アップロードに失敗しました（終了コード ${ran.exitCode}）`)
   const markdown = attachmentMarkdown(parseJson(ran.stdout))
-  if (markdown === null) throw new Error('アップロード結果を読めませんでした')
+  if (markdown === null) throw new Notice('アップロード結果を読めませんでした')
   await callJson($, 'notion-update-page', {
     page_id: pending.pageId,
     command: 'insert_content',
@@ -133,7 +134,7 @@ async function freeDestination($: EngineInterface, dir: string, name: string): P
     const candidate = `${dir}/${n === 0 ? name : withSuffix(name, n)}`
     if (!(await $.fs.exists(candidate))) return candidate
   }
-  throw new Error('同名のファイルが多すぎるため保存できません')
+  throw new Notice('同名のファイルが多すぎるため保存できません')
 }
 
 // Files land in a folder of their own and are never opened or read back
@@ -141,15 +142,15 @@ async function freeDestination($: EngineInterface, dir: string, name: string): P
 async function download($: EngineInterface, issue: Issue, item: Attachment): Promise<string> {
   const reply = await callJson($, 'notion-get-file-download-urls', { references: [item.ref] })
   const url = findHttpsUrl(reply)
-  if (url === null) throw new Error('ダウンロード用の URL を取得できませんでした')
+  if (url === null) throw new Notice('ダウンロード用の URL を取得できませんでした')
   const home = await $.env.get('HOME')
-  if (home === undefined || home === '') throw new Error('HOME が分からないため保存できません')
+  if (home === undefined || home === '') throw new Notice('HOME が分からないため保存できません')
   const dir = `${home}/Downloads/notion-backlog/${sanitizeFileName(issue.key ?? issue.pageId)}`
   await $.process.run(['mkdir', '-p', dir])
   const dest = await freeDestination($, dir, sanitizeFileName(item.name))
   const args = ['curl', '-sS', '--fail', '--proto', '=https', '--max-filesize', MAX_DOWNLOAD_BYTES, '-o', dest, url]
   const ran = await $.process.run(args, { timeoutMs: 120000 })
-  if (ran.exitCode !== 0) throw new Error(`ダウンロードに失敗しました: ${ran.stderr.slice(0, 200)}`)
+  if (ran.exitCode !== 0) throw new Notice(`ダウンロードに失敗しました（終了コード ${ran.exitCode}）`)
   return dest
 }
 
@@ -165,7 +166,7 @@ async function asPng($: EngineInterface, file: string): Promise<string> {
   if (/\.png$/i.test(file)) return file
   const out = `${file}.png`
   const ran = await $.process.run(['sips', '-s', 'format', 'png', file, '--out', out], { timeoutMs: 30000 })
-  if (ran.exitCode !== 0) throw new Error('プレビュー用に PNG へ変換できませんでした')
+  if (ran.exitCode !== 0) throw new Notice('プレビュー用に PNG へ変換できませんでした')
   return out
 }
 

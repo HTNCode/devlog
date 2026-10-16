@@ -64,6 +64,8 @@ export type Pending =
       toEnd: string
     }
   | { kind: 'upload'; pageId: string; label: string; path: string; name: string; size: number }
+  | { kind: 'setup'; title: string; parentId: string | null }
+  | { kind: 'server'; name: string }
 
 export type Load = {
   isLoading: boolean
@@ -91,6 +93,7 @@ declare module 'claude-code' {
       attachments: Attachments | null
       summaries: Summary[]
       openSummary: string | null
+      notionServers: string[]
     }
   }
 }

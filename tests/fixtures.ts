@@ -1,11 +1,17 @@
-import type { McpToolResult, On } from 'claude-code'
+import type { McpToolResult, On, UiPane } from 'claude-code'
 
 export type Recorded = { tool: string; args: Record<string, unknown> }
+
+export const CREATED_DB = 'collection://11111111-2222-3333-4444-555555555555'
 
 export type FakeNotion = {
   rows: Record<string, unknown>[]
   pageStatus: string
   calls: Recorded[]
+  // The origin of every pane close, and the width of every open, when a
+  // test wants them.
+  closes?: string[]
+  opens?: number[]
 }
 
 const SCHEMA = {
@@ -50,22 +56,58 @@ function answer(fake: FakeNotion, tool: string, args: Record<string, unknown>): 
     return reply({ text: `<data-source-state>\n${JSON.stringify(SCHEMA)}\n</data-source-state>` })
   }
   if (tool === 'notion-update-data-source') return reply({ text: String(args['statements']) })
+  if (tool === 'notion-create-database') return reply({ text: `<data-source url="{{${CREATED_DB}}}">` })
   if (tool === 'notion-fetch') {
     return reply({ text: `<properties>\n${JSON.stringify({ 'ステータス': fake.pageStatus })}\n</properties>` })
   }
   return reply({})
 }
 
+// The pane's open state follows ui.open and ui.close, as the engine's own
+// record does, so a bare /devlog can toggle.
+function trackPane(on: On, fake: FakeNotion): void {
+  let isOpen = false
+  const pane: UiPane = {
+    id: 'notion-backlog',
+    title: 'Devlog',
+    isShown: true,
+    isFocused: false,
+    isPlaced: true,
+  }
+  on('ui.open', (_$, e) => {
+    isOpen = true
+    fake.opens?.push(e.columns ?? 0)
+    return { value: { isPlaced: true as const } }
+  })
+  on('ui.panes', () => ({ value: isOpen ? [pane] : [] }))
+  on('ui.close', (_$, e) => {
+    isOpen = false
+    fake.closes?.push(e.origin.kind)
+    return { value: undefined }
+  })
+}
+
 // Stands in for the Notion connector and git beneath the plugin, recording
 // every call so a test can check what would have been written.
 export function fakeNotion(on: On, fake: FakeNotion, branch: string): void {
-  on('session.start', (_$, e) => ({ cwd: e.cwd }))
-  on('command.register', (_$, e) => ({ value: { command: e.name } }))
-  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  fakeHost(on, fake, branch)
   on('mcp.call', (_$, e) => {
     fake.calls.push({ tool: e.tool, args: e.args })
     return { value: answer(fake, e.tool, e.args) }
   })
+}
+
+// Everything fakeNotion stands in for but the connector, for a test that
+// answers mcp.call itself; fakeAnswer gives fakeNotion's answers.
+export function fakeAnswer(fake: FakeNotion, tool: string, args: Record<string, unknown>): McpToolResult {
+  return answer(fake, tool, args)
+}
+
+export function fakeHost(on: On, fake: FakeNotion, branch: string): void {
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('session.surfaces', () => ({ value: ['terminal' as const] }))
+  trackPane(on, fake)
   on('process.run', () => ({
     value: {
       exitCode: 0,
@@ -75,6 +117,25 @@ export function fakeNotion(on: On, fake: FakeNotion, branch: string): void {
       isStderrTruncated: false,
     },
   }))
+}
+
+// Stands in for the settings menu: a row for each option the plugin saves,
+// and every write kept as key=value.
+export function fakeConfig(on: On, saved: string[]): void {
+  on('config.list', () => ({
+    value: ['dataSource', 'server'].map(field => ({
+      key: `notion-backlog.${field}`,
+      label: field,
+      kind: 'text' as const,
+      value: '',
+      provider: { plugin: 'notion-backlog', tier: 'user' as const },
+      isLocked: false,
+    })),
+  }))
+  on('config.set', (_$, e) => {
+    saved.push(`${e.key}=${String(e.value)}`)
+    return { value: e.value }
+  })
 }
 
 export const RUN = {

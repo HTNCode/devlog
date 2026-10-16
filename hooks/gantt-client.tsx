@@ -2,15 +2,19 @@ import type { ClientKeyEvent, ClientModule, ClientPointerEvent, ClientSurface } 
 
 // Self-contained on purpose: the surface module runs on the drawing thread
 // and gets only day offsets, so it needs no date arithmetic or imports.
+// The cell rules mirror rowRuns in gantt.ts; change both together.
 
-type Row = { id: string; label: string; start: number; end: number; color: 'error' | 'suggestion' | 'text' }
+type Color = 'error' | 'suggestion' | 'inactive' | 'merged'
+type Row = { id: string; label: string; start: number; end: number; color: Color }
 
 type Props = {
   days: number
   cellsPerDay: number
   labelWidth: number
   todayOffset: number
+  weekStarts: number[]
   header: string
+  dayLine: string | null
   rows: Row[]
   selected: string | null
   pending: { id: string; start: number; end: number } | null
@@ -19,22 +23,32 @@ type Props = {
 type Preview = { id: string; startDelta: number; endDelta: number }
 type Drag = { id: string; x0: number; isEndOnly: boolean; delta: number }
 type State = { index: number; drag: Drag | null; preview: Preview | null }
+type Kind = 'bar' | 'barToday' | 'today' | 'week' | 'empty'
+type Run = { kind: Kind; text: string }
 
-const HEADER_ROWS = 1
+const GLYPH: Record<Kind, string> = { bar: '█', barToday: '▓', today: '│', week: '┊', empty: '·' }
 
-function cell(day: number, start: number, end: number, today: number): string {
+function kindOf(day: number, start: number, end: number, p: Props): Kind {
   const isBar = day >= start && day <= end
-  if (day === today) return isBar ? '▓' : '│'
-  return isBar ? '█' : '·'
+  if (day === p.todayOffset) return isBar ? 'barToday' : 'today'
+  if (isBar) return 'bar'
+  return p.weekStarts.includes(day) ? 'week' : 'empty'
 }
 
-function segments(start: number, end: number, p: Props): [string, string, string] {
-  const parts: [string, string, string] = ['', '', '']
+function runs(start: number, end: number, p: Props): Run[] {
+  const out: Run[] = []
   for (let day = 0; day < p.days; day += 1) {
-    const slot = day < start ? 0 : day <= end ? 1 : 2
-    parts[slot] += cell(day, start, end, p.todayOffset).repeat(p.cellsPerDay)
+    const kind = kindOf(day, start, end, p)
+    const text = GLYPH[kind].repeat(p.cellsPerDay)
+    const last = out[out.length - 1]
+    if (last !== undefined && last.kind === kind) last.text += text
+    else out.push({ kind, text })
   }
-  return parts
+  return out
+}
+
+function headerRows(p: Props): number {
+  return p.dayLine === null ? 1 : 2
 }
 
 function span(row: Row, p: Props, s: State): { start: number; end: number; isChanged: boolean } {
@@ -69,7 +83,7 @@ function keyHandler(p: Props, s: State, surface: ClientSurface<State>) {
 }
 
 function pressDown(ev: ClientPointerEvent, p: Props, s: State, surface: ClientSurface<State>): void {
-  const index = ev.y - HEADER_ROWS
+  const index = ev.y - headerRows(p)
   const row = p.rows[index]
   if (row === undefined) return
   const day = Math.floor((ev.x - p.labelWidth - 1) / p.cellsPerDay)
@@ -107,25 +121,38 @@ const Gantt: ClientModule<Props, State> = (p, surface) => {
   const s: State = surface.state ?? { index: initial, drag: null, preview: null }
   surface.onKey(keyHandler(p, s, surface))
   surface.onPointer(pointerHandler(p, s, surface))
+  const pad = ' '.repeat(p.labelWidth + 1)
   return (
     <Box flexDirection="column">
       <Text dimColor>
-        {' '.repeat(p.labelWidth + 1)}
+        {pad}
         {p.header}
       </Text>
+      {p.dayLine !== null && (
+        <Text dimColor>
+          {pad}
+          {p.dayLine}
+        </Text>
+      )}
       {p.rows.map((row, i) => {
         const now = span(row, p, s)
-        const [before, bar, after] = segments(now.start, now.end, p)
+        const barColor = now.isChanged ? 'warning' : row.color
         return (
           <Box key={row.id}>
             <Box width={p.labelWidth + 1}>
-              <Text wrap="truncate-end" inverse={i === s.index}>
+              <Text wrap="truncate-end" inverse={i === s.index} color={row.color === 'error' ? 'error' : undefined}>
                 {row.label}
               </Text>
             </Box>
-            <Text dimColor>{before}</Text>
-            <Text color={now.isChanged ? 'warning' : row.color}>{bar}</Text>
-            <Text dimColor>{after}</Text>
+            {runs(now.start, now.end, p).map((run, j) => (
+              <Text
+                key={`${row.id}-${j}`}
+                color={run.kind === 'today' ? 'claude' : run.kind === 'bar' || run.kind === 'barToday' ? barColor : undefined}
+                dimColor={run.kind === 'week' || run.kind === 'empty'}
+              >
+                {run.text}
+              </Text>
+            ))}
           </Box>
         )
       })}

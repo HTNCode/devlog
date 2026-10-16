@@ -16,7 +16,7 @@ export function summaryBlock($: EngineInterface, ui: Pick<Ui, 'Box' | 'Text' | '
         </Text>
       ))}
       <Button key={`summary-close-${issue.pageId}`} dimColor onPress={() => void closeSummary($)}>
-        要約を閉じる (Esc)
+        要約を閉じる (q)
       </Button>
     </Box>
   )

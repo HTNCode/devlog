@@ -1,14 +1,16 @@
-import type { Elements, EngineInterface, On } from 'claude-code'
+import type { EngineInterface, On } from 'claude-code'
 
 import type { Issue, Pending } from '../types'
-import type { GanttModel, GanttRow } from './gantt'
-import { barSegments, dayDiff, ganttLayout, ganttRows, headerLine } from './gantt'
+import { showList } from './command'
+import type { GanttModel } from './gantt'
+import { dayDiff, dayLine, ganttLayout, ganttRows, headerLine } from './gantt'
 import { proposeDates } from './gantt-actions'
-import { todayJst } from './keys'
+import type { BaseUi } from './gantt-text'
+import { legend, textChart } from './gantt-text'
+import { shortDate, todayJst } from './keys'
 import { confirmRow, loadLine } from './pane-list'
-import { getIssues, getLoad, getPending, getSchema, getSelected, getView, PANE, setSelected, setView } from './state'
-
-type BaseUi = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'>
+import { getIssues, getLoad, getPending, getSchema, getSelected, getView, PANE, setSelected } from './state'
+import { closePane } from './summary'
 
 const MAX_DELTA = 365
 
@@ -23,38 +25,16 @@ async function buildModel($: EngineInterface, bodyColumns: number, issues: Issue
     pending?.kind === 'dates'
       ? { id: pending.pageId, start: dayDiff(layout.from, pending.toStart), end: dayDiff(layout.from, pending.toEnd) }
       : null
-  return { ...layout, header: headerLine(layout), rows, selected, pending: preview }
+  return { ...layout, header: headerLine(layout), dayLine: dayLine(layout), rows, selected, pending: preview }
 }
 
-function textRow($: EngineInterface, ui: BaseUi, row: GanttRow, model: GanttModel) {
-  const { Box, Text, Button } = ui
-  const now = model.pending?.id === row.id ? model.pending : row
-  const [before, bar, after] = barSegments(now.start, now.end, model)
+function detailLine(ui: BaseUi, issue: Issue | undefined) {
+  const { Text } = ui
+  if (issue === undefined) return <Text dimColor>選択中: なし</Text>
   return (
-    <Box key={`grow-${row.id}`}>
-      <Button key={`gsel-${row.id}`} plain onPress={() => void setSelected($, () => row.id)}>
-        {model.selected === row.id ? '>' : ' '}
-      </Button>
-      <Box width={model.labelWidth}>
-        <Text wrap="truncate-end">{row.label}</Text>
-      </Box>
-      <Text dimColor>{before}</Text>
-      <Text color={now === row ? row.color : 'warning'}>{bar}</Text>
-      <Text dimColor>{after}</Text>
-    </Box>
-  )
-}
-
-function textChart($: EngineInterface, ui: BaseUi, model: GanttModel) {
-  const { Box, Text } = ui
-  return (
-    <Box flexDirection="column">
-      <Text dimColor>
-        {' '.repeat(model.labelWidth + 1)}
-        {model.header}
-      </Text>
-      {model.rows.map(row => textRow($, ui, row, model))}
-    </Box>
+    <Text wrap="truncate-end">
+      {issue.title} <Text dimColor>[{issue.status}] {shortDate(issue.start)}〜{shortDate(issue.end)}</Text>
+    </Text>
   )
 }
 
@@ -62,7 +42,7 @@ function textChart($: EngineInterface, ui: BaseUi, model: GanttModel) {
 // where the Client gets no mouse or focus (a multiplexer such as herdr).
 // 'y' and 'x' stay free for the shared confirm row.
 function controls($: EngineInterface, ui: BaseUi, issue: Issue | undefined, model: GanttModel) {
-  const { Box, Text, Button } = ui
+  const { Box, Button } = ui
   const index = model.rows.findIndex(row => row.id === model.selected)
   const step = (d: number) => {
     const target = model.rows[Math.min(model.rows.length - 1, Math.max(0, index + d))]
@@ -73,9 +53,7 @@ function controls($: EngineInterface, ui: BaseUi, issue: Issue | undefined, mode
   }
   return (
     <Box key="gantt-controls" flexDirection="column">
-      <Text dimColor wrap="truncate-end">
-        選択中: {issue === undefined ? 'なし' : (issue.key ?? issue.title)}
-      </Text>
+      {detailLine(ui, issue)}
       <Box gap={1} flexWrap="wrap">
         <Button key="gantt-prev" dimColor hotkey="k" onPress={() => step(-1)}>前へ</Button>
         <Button key="gantt-next" dimColor hotkey="j" onPress={() => step(1)}>次へ</Button>
@@ -131,14 +109,18 @@ export function registerGantt(on: On): void {
     return (
       <Box flexDirection="column">
         <Box gap={1}>
-          <Button key="gantt-back" dimColor hotkey="q" onPress={() => void setView($, () => 'list' as const)}>
+          <Button key="gantt-back" dimColor hotkey="g" onPress={() => void showList($)}>
             一覧へ
+          </Button>
+          <Button key="gantt-close" dimColor hotkey="q" onPress={() => void closePane($)}>
+            閉じる
           </Button>
           <Text dimColor wrap="truncate-end">
             クリックで選択、左右キーで期限、shift+左右で期間、Enter で提案
           </Text>
         </Box>
         {status !== null && <Text dimColor>{status}</Text>}
+        {model.rows.length > 0 && legend(ui)}
         {model.rows.length === 0 ? <Text dimColor>期限の入った未完了の課題がありません</Text> : chart}
         {model.rows.length > 0 && controls($, ui, issue, model)}
         {showsConfirm(pending) && confirmRow($, ui, pending)}

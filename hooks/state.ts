@@ -22,6 +22,7 @@ const branchAtom = atom({ plugin: 'notion-backlog', key: 'branch' } as const, nu
 const summariesAtom = atom({ plugin: 'notion-backlog', key: 'summaries' } as const, [] as Summary[])
 const openSummaryAtom = atom({ plugin: 'notion-backlog', key: 'openSummary' } as const, null as string | null)
 const attachmentsAtom = atom({ plugin: 'notion-backlog', key: 'attachments' } as const, null as Attachments | null)
+const notionServersAtom = atom({ plugin: 'notion-backlog', key: 'notionServers' } as const, [] as string[])
 const loadAtom = atom({ plugin: 'notion-backlog', key: 'load' } as const, {
   isLoading: false,
   isWriting: false,
@@ -101,4 +102,10 @@ export function getAttachments($: EngineInterface) {
 }
 export function setAttachments($: EngineInterface, fn: Fn<Attachments | null>) {
   return update($, attachmentsAtom, fn)
+}
+export function getNotionServers($: EngineInterface) {
+  return read($, notionServersAtom)
+}
+export function setNotionServers($: EngineInterface, fn: Fn<string[]>) {
+  return update($, notionServersAtom, fn)
 }

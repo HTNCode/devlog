@@ -1,6 +1,6 @@
 {
   "name": "notion-backlog",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Notion の課題 DB を土台にした Backlog 風チケット管理（/devlog: 課題一覧ペイン、要約、現在の課題の帯、ガントチャート、Git 連動、添付。Notion への書き込みは確定ボタン経由）",
   "types": "./types/index.d.ts",
   "userConfig": {
@@ -13,7 +13,7 @@
     "server": {
       "type": "string",
       "title": "Notion の MCP サーバー名",
-      "description": "/mcp に出る名前",
+      "description": "/mcp に出る名前。環境によって名前が違うとき（Claude Desktop など）はカンマ区切りで複数書く。ここに書いた名前にだけ接続する",
       "default": "claude.ai Notion"
     },
     "propTitle": {

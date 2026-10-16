@@ -3,9 +3,20 @@ import type { EngineInterface } from 'claude-code'
 import type { Draft, Pending, Schema } from '../types'
 import { confirmUpload } from './attach'
 import { CONFIG } from './config'
+import { errorText } from './errors'
 import { confirmDates } from './gantt-actions'
 import { draftTag, keyFromBranch, missingFields } from './keys'
-import { addTagOption, createIssue, fetchSchema, listOpenIssues, readStatus, updateStatus } from './notion'
+import { confirmServer } from './mcp'
+import {
+  addTagOption,
+  createIssue,
+  fetchSchema,
+  isDataSourceChecked,
+  listOpenIssues,
+  readStatus,
+  updateStatus,
+} from './notion'
+import { confirmSetup } from './setup'
 import {
   getLoad,
   getPending,
@@ -27,7 +38,7 @@ import {
 export const STALE_MS = 5 * 60 * 1000
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return errorText(error)
 }
 
 // Callers that arrive while a load runs share it instead of returning
@@ -47,7 +58,10 @@ async function load($: EngineInterface, isSchemaReloaded: boolean): Promise<void
   await setLoad($, l => ({ ...l, isLoading: true, error: null }))
   try {
     const cached = await getSchema($)
-    const schema = cached === null || isSchemaReloaded ? await fetchSchema($) : cached
+    // The schema outlives a reload in $.state, but the resolved data source
+    // id does not, so the first load after one reads the schema again.
+    const isFresh = cached === null || isSchemaReloaded || !isDataSourceChecked()
+    const schema = isFresh ? await fetchSchema($) : cached
     const issues = await listOpenIssues($)
     const fetchedAt = await $.clock.now()
     await setSchema($, () => schema)
@@ -111,7 +125,7 @@ async function confirmCreate($: EngineInterface, draft: Draft): Promise<string> 
   return `「${draft.title.trim()}」を起票しました`
 }
 
-function confirmByKind($: EngineInterface, pending: Pending): Promise<string> {
+function confirmByKind($: EngineInterface, pending: Exclude<Pending, { kind: 'setup' | 'server' }>): Promise<string> {
   switch (pending.kind) {
     case 'status':
       return confirmStatus($, pending)
@@ -124,12 +138,31 @@ function confirmByKind($: EngineInterface, pending: Pending): Promise<string> {
   }
 }
 
+// A second press while a confirm runs is dropped before anything awaits:
+// isWriting alone is read after an await, so two presses could both pass
+// it and write twice (two DBs from one setup). The module's own flag; a
+// reload, which only an option save causes, ends the confirm anyway.
+let isConfirming = false
+
 // The only path that writes to Notion: it runs from a confirm button the
 // person pressed, never from a model turn.
 export async function confirmPending($: EngineInterface): Promise<void> {
+  if (isConfirming) return
+  isConfirming = true
+  try {
+    await runConfirm($)
+  } finally {
+    isConfirming = false
+  }
+}
+
+async function runConfirm($: EngineInterface): Promise<void> {
   const pending = await getPending($)
   const load = await getLoad($)
   if (pending === null || load.isWriting) return
+  // Both end by saving an option, which reloads this module mid-call.
+  if (pending.kind === 'setup') return confirmSetup($, pending)
+  if (pending.kind === 'server') return confirmServer($, pending.name)
   await setLoad($, l => ({ ...l, isWriting: true }))
   try {
     $.ui.toast(await confirmByKind($, pending))
