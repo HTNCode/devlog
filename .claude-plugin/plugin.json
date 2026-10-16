@@ -13,7 +13,7 @@
     "server": {
       "type": "string",
       "title": "Notion の MCP サーバー名",
-      "description": "/mcp に出る名前",
+      "description": "/mcp に出る名前。環境によって名前が違うとき（Claude Desktop など）はカンマ区切りで複数書く。ここに書いた名前にだけ接続する",
       "default": "claude.ai Notion"
     },
     "propTitle": {

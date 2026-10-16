@@ -266,3 +266,46 @@ test('a create Notion failed midway is reported as unknown, never as not made', 
   expect(toasts.some(text => text.startsWith('DB を作れませんでした'))).toBe(false)
   await ui.unmount()
 })
+
+test('a create the first listed server lacks is never sent to the next one', { options: { dataSource: '', server: 'first, second' } }, async ($, on) => {
+  mock.clock(on, { now: NOW })
+  const notion = emptyNotion()
+  const sent: string[] = []
+  const toasts: string[] = []
+  fakeHost(on, notion, 'main')
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('mcp.call', (_$, e) => {
+    sent.push(`${e.server}:${e.tool}`)
+    if (e.server === 'first' && e.tool === 'notion-create-database') {
+      return { deny: `$.mcp.call: no connected MCP tool "${e.tool}" on a server named "${e.server}"` }
+    }
+    return { value: fakeAnswer(notion, e.tool, e.args) }
+  })
+  await $.command.run({ ...RUN, args: 'setup' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'confirm-yes' })
+  expect(sent.some(call => call.startsWith('second:'))).toBe(false)
+  expect(toasts.some(text => text.includes('接続先「first」で notion-create-database を使えません'))).toBe(true)
+  await ui.unmount()
+})
+
+test('a first setup with the connector under another name offers it in the pane', UNSET, async ($, on) => {
+  mock.clock(on, { now: NOW })
+  const notion = emptyNotion()
+  const calls: string[] = []
+  fakeHost(on, notion, 'main')
+  on('tool.list', () => ({ value: [{ name: 'mcp__alias__notion-fetch', description: 'Fetch', mcp: true }] }))
+  on('mcp.call', (_$, e) => {
+    calls.push(e.server)
+    return { deny: `$.mcp.call: no connected MCP tool "${e.tool}" on a server named "${e.server}"` }
+  })
+  await $.command.run({ ...RUN, args: 'setup' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'confirm-yes' })
+  expect(await ui.find({ type: 'Button', key: 'add-server-alias' })).toBeDefined()
+  expect(calls.every(server => server === 'claude.ai Notion')).toBe(true)
+  await ui.unmount()
+})

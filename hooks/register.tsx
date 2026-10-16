@@ -5,6 +5,7 @@ import { registerBand } from './band'
 import { openCreate, runCommand } from './command'
 import { configure } from './config'
 import { registerGit } from './git'
+import { registerMcp, serverCandidates } from './mcp'
 import { registerSummary } from './summary'
 import { registerGantt } from './pane-gantt'
 import { todayJst } from './keys'
@@ -105,6 +106,7 @@ export const register: Register = (on, options) => {
       attachments: await getAttachments($),
       summaries: await getSummaries($),
       openSummary: await getOpenSummary($),
+      serverCandidates: await serverCandidates($),
     }
     return listView($, ui, data, () => void openCreate($))
   })
@@ -112,5 +114,6 @@ export const register: Register = (on, options) => {
   registerBand(on)
   registerGantt(on)
   registerGit(on)
+  registerMcp(on)
   registerSummary(on)
 }

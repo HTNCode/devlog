@@ -21,7 +21,7 @@ const DEFAULTS = {
 } as const
 
 export const CONFIG = {
-  server: DEFAULTS.server as string,
+  servers: [DEFAULTS.server] as string[],
   dataSource: '',
   prop: {
     title: DEFAULTS.propTitle as string,
@@ -37,7 +37,9 @@ export const CONFIG = {
   humanOwner: DEFAULTS.ownerHuman as string,
 }
 
-// Accepts a collection:// URL, a database URL or a bare id, dashed or not.
+// Takes the id out of a collection:// URL, a database URL or a bare id,
+// dashed or not. A database's id is not its data source's: fetchSchema in
+// notion.ts reads it as a database and takes its data source instead.
 const UUID = /([0-9a-f]{8})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{12})/i
 
 function text(options: PluginOptions, key: keyof typeof DEFAULTS): string {
@@ -50,11 +52,18 @@ export function normalizeDataSource(raw: string): string {
   return parts === null ? '' : parts.slice(1, 6).join('-').toLowerCase()
 }
 
+// Only the servers named here are ever called: a connector found under
+// another name is offered to the person, never used on its own.
+export function serverList(raw: string): string[] {
+  const names = raw.split(',').map(name => name.trim()).filter(name => name !== '')
+  return names.length > 0 ? [...new Set(names)] : [DEFAULTS.server]
+}
+
 // The prop and status objects are updated in place: other modules hold
 // references to them (parse.ts exports CONFIG.prop as PROP).
 export function configure(options: PluginOptions): void {
   const source = options['dataSource']
-  CONFIG.server = text(options, 'server')
+  CONFIG.servers = serverList(text(options, 'server'))
   CONFIG.dataSource = typeof source === 'string' ? normalizeDataSource(source) : ''
   Object.assign(CONFIG.prop, {
     title: text(options, 'propTitle'),
@@ -83,7 +92,7 @@ export function dataSourceUrl(): string {
 }
 
 export const NOT_CONFIGURED =
-  'Notion の DB が未設定です。/devlog setup で新しく作るか、/config で notion-backlog の dataSource に DB の ID を入れてください'
+  'Notion の DB が未設定です。/devlog setup で新しく作るか、/config で notion-backlog の dataSource に DB の URL か ID を入れてください'
 
 const PLUGIN = 'notion-backlog'
 

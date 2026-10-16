@@ -6,7 +6,16 @@ import { CONFIG } from './config'
 import { errorText } from './errors'
 import { confirmDates } from './gantt-actions'
 import { draftTag, keyFromBranch, missingFields } from './keys'
-import { addTagOption, createIssue, fetchSchema, listOpenIssues, readStatus, updateStatus } from './notion'
+import { confirmServer } from './mcp'
+import {
+  addTagOption,
+  createIssue,
+  fetchSchema,
+  isDataSourceChecked,
+  listOpenIssues,
+  readStatus,
+  updateStatus,
+} from './notion'
 import { confirmSetup } from './setup'
 import {
   getLoad,
@@ -49,7 +58,10 @@ async function load($: EngineInterface, isSchemaReloaded: boolean): Promise<void
   await setLoad($, l => ({ ...l, isLoading: true, error: null }))
   try {
     const cached = await getSchema($)
-    const schema = cached === null || isSchemaReloaded ? await fetchSchema($) : cached
+    // The schema outlives a reload in $.state, but the resolved data source
+    // id does not, so the first load after one reads the schema again.
+    const isFresh = cached === null || isSchemaReloaded || !isDataSourceChecked()
+    const schema = isFresh ? await fetchSchema($) : cached
     const issues = await listOpenIssues($)
     const fetchedAt = await $.clock.now()
     await setSchema($, () => schema)
@@ -113,7 +125,7 @@ async function confirmCreate($: EngineInterface, draft: Draft): Promise<string> 
   return `「${draft.title.trim()}」を起票しました`
 }
 
-function confirmByKind($: EngineInterface, pending: Exclude<Pending, { kind: 'setup' }>): Promise<string> {
+function confirmByKind($: EngineInterface, pending: Exclude<Pending, { kind: 'setup' | 'server' }>): Promise<string> {
   switch (pending.kind) {
     case 'status':
       return confirmStatus($, pending)
@@ -148,8 +160,9 @@ async function runConfirm($: EngineInterface): Promise<void> {
   const pending = await getPending($)
   const load = await getLoad($)
   if (pending === null || load.isWriting) return
-  // Setup ends by saving dataSource, which reloads this module mid-call.
+  // Both end by saving an option, which reloads this module mid-call.
   if (pending.kind === 'setup') return confirmSetup($, pending)
+  if (pending.kind === 'server') return confirmServer($, pending.name)
   await setLoad($, l => ({ ...l, isWriting: true }))
   try {
     $.ui.toast(await confirmByKind($, pending))

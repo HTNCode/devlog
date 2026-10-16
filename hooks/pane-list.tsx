@@ -9,6 +9,7 @@ import { filterTab, isOverdue, shortDate } from './keys'
 import type { AttachUi } from './pane-attach'
 import { attachSection } from './pane-attach'
 import { setPending, setTab } from './state'
+import { serverRow } from './pane-server'
 import { summaryBlock } from './pane-summary'
 import { closePane, toggleSummary } from './summary'
 import { startWork } from './work'
@@ -26,6 +27,7 @@ export type ListData = {
   attachments: Attachments | null
   summaries: Summary[]
   openSummary: string | null
+  serverCandidates: string[]
 }
 
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
@@ -55,6 +57,8 @@ function describe(pending: Pending): string {
       return `添付: ${pending.name} (${Math.ceil(pending.size / 1024)} KB) → ${pending.label}`
     case 'setup':
       return `Notion に課題 DB「${pending.title}」を作成（${pending.parentId === null ? 'ワークスペース直下・非公開' : `ページ ${pending.parentId} の下`}）`
+    case 'server':
+      return `Notion の接続先に「${pending.name}」を追加`
   }
 }
 
@@ -174,6 +178,7 @@ export function listView($: EngineInterface, ui: AttachUi, data: ListData, openC
         </Button>
       </Box>
       {status !== null && <Text dimColor>{status}</Text>}
+      {serverRow($, ui, data.serverCandidates)}
       {data.pending !== null && data.pending.kind !== 'create' && confirmRow($, ui, data.pending)}
       {shown.length === 0 && !data.load.isLoading && <Text dimColor>該当する課題はありません</Text>}
       {shown.map(issue => row($, ui, issue, data))}
