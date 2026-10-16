@@ -106,6 +106,7 @@ export function fakeAnswer(fake: FakeNotion, tool: string, args: Record<string, 
 export function fakeHost(on: On, fake: FakeNotion, branch: string): void {
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('session.surfaces', () => ({ value: ['terminal' as const] }))
   trackPane(on, fake)
   on('process.run', () => ({
     value: {
