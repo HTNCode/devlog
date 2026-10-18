@@ -33,7 +33,7 @@ async function answer($: EngineInterface, e: CommandRunInput) {
   try {
     return { text: await runCommand($, e.args, e.presentation) }
   } catch (error) {
-    return { text: `notion-backlog: ${errorText(error)}` }
+    return { text: `devlog: ${errorText(error)}` }
   }
 }
 
@@ -41,7 +41,7 @@ async function answer($: EngineInterface, e: CommandRunInput) {
 // what can still reject a background refresh is the state write itself,
 // which has no place on screen, so it goes to the debug log.
 function logBackground($: EngineInterface, error: unknown): void {
-  $.ui.log(`notion-backlog: 背景の読み込みに失敗しました: ${errorText(error)}`, { to: 'debug' })
+  $.ui.log(`devlog: 背景の読み込みに失敗しました: ${errorText(error)}`, { to: 'debug' })
 }
 
 export const register: Register = (on, options) => {

@@ -24,20 +24,20 @@ Notionへの書き込みは、すべて人が「確定」を押したときだ�
 Claude Codeのプロンプトで次を実行し、`y`でマーケットプレイスを追加します。
 
 ```
-/plugin install notion-backlog --marketplace HTNCode/devlog
+/plugin install devlog --marketplace HTNCode/devlog
 ```
 
 シェルからなら:
 
 ```
-claude plugin install notion-backlog --marketplace HTNCode/devlog
+claude plugin install devlog --marketplace HTNCode/devlog
 ```
 
 ## 設定
 
 課題DBがまだ無いときは、`/devlog setup`で作るのがいちばん簡単です。ペインに出る確定ボタンを押すと、下の表の構成でDBを作り、`dataSource`にも自動で設定します。作る場所は、`/devlog setup <NotionページのURL>`でそのページの下、URLを省くとワークスペース直下（非公開）です。
 
-既にあるDBを使うときは、インストール時の設定画面、または`/config`の`notion-backlog`の項目で、次を設定します。
+既にあるDBを使うときは、インストール時の設定画面、または`/config`の`devlog`の項目で、次を設定します。
 
 | 項目 | 内容 | 既定値 |
 | --- | --- | --- |
@@ -93,7 +93,7 @@ DBには次の種類のプロパティが必要です。名前は設定で変え
 - エラーはdevlog自身の文言だけをそのまま表示する。Notionやエンジンから来たエラーの本文は表示せず、決まった分類の文言（権限がない、見つからない、など）に置き換える
 - Notionに接続するのは`server`に書いた接続先だけ。同じ名前のツールを持つ別の接続先は候補として表示するだけで、確定するまで何も送らない
 - 要約はツールも会話履歴も持たないモデル呼び出しで作る
-- 添付の保存先は`~/Downloads/notion-backlog/<課題キー>/`。保存しても自動では開かない
+- 添付の保存先は`~/Downloads/devlog/<課題キー>/`。保存しても自動では開かない
 - Claude自身がNotionツールで行う書き込みは止めない
 
 ## 開発

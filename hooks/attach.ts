@@ -145,7 +145,7 @@ async function download($: EngineInterface, issue: Issue, item: Attachment): Pro
   if (url === null) throw new Notice('ダウンロード用の URL を取得できませんでした')
   const home = await $.env.get('HOME')
   if (home === undefined || home === '') throw new Notice('HOME が分からないため保存できません')
-  const dir = `${home}/Downloads/notion-backlog/${sanitizeFileName(issue.key ?? issue.pageId)}`
+  const dir = `${home}/Downloads/devlog/${sanitizeFileName(issue.key ?? issue.pageId)}`
   await $.process.run(['mkdir', '-p', dir])
   const dest = await freeDestination($, dir, sanitizeFileName(item.name))
   const args = ['curl', '-sS', '--fail', '--proto', '=https', '--max-filesize', MAX_DOWNLOAD_BYTES, '-o', dest, url]

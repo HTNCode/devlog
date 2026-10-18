@@ -9,9 +9,9 @@ const SEK = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1'
 const USAGE = { input_tokens: 10, output_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
 
 const PANE = {
-  plugin: 'notion-backlog',
+  plugin: 'devlog',
   component: 'Pane' as const,
-  requestId: 'notion-backlog',
+  requestId: 'devlog',
   props: {
     title: 'Devlog',
     isFocused: true,

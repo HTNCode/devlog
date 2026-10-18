@@ -68,7 +68,7 @@ function answer(fake: FakeNotion, tool: string, args: Record<string, unknown>): 
 function trackPane(on: On, fake: FakeNotion): void {
   let isOpen = false
   const pane: UiPane = {
-    id: 'notion-backlog',
+    id: 'devlog',
     title: 'Devlog',
     isShown: true,
     isFocused: false,
@@ -124,11 +124,11 @@ export function fakeHost(on: On, fake: FakeNotion, branch: string): void {
 export function fakeConfig(on: On, saved: string[]): void {
   on('config.list', () => ({
     value: ['dataSource', 'server'].map(field => ({
-      key: `notion-backlog.${field}`,
+      key: `devlog.${field}`,
       label: field,
       kind: 'text' as const,
       value: '',
-      provider: { plugin: 'notion-backlog', tier: 'user' as const },
+      provider: { plugin: 'devlog', tier: 'user' as const },
       isLocked: false,
     })),
   }))
@@ -145,7 +145,7 @@ export const RUN = {
 }
 
 export const BAND = {
-  plugin: 'notion-backlog',
+  plugin: 'devlog',
   component: 'AbovePrompt' as const,
   props: {
     hasSurvey: false,

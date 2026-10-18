@@ -24,7 +24,7 @@ const NOTION_HOST = /(^|\.)notion\.(so|com|site)$/
 const NOTION_ID = /([0-9a-f]{8})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{12})/gi
 
 export const ALREADY_CONFIGURED =
-  'DB は設定済みです。作り直すときは /config で notion-backlog の dataSource を空にしてから実行してください'
+  'DB は設定済みです。作り直すときは /config で devlog の dataSource を空にしてから実行してください'
 const NO_PAGE_ID = 'ページの URL から ID を読み取れませんでした。Notion でページの URL をコピーし直すか、URL を省いてワークスペース直下に作ってください'
 const UNSAFE = 'プロパティ名か選択肢の名前に引用符・バックスラッシュ・制御文字があるため、DB を作れません'
 
@@ -121,7 +121,7 @@ export async function confirmSetup($: EngineInterface, pending: SetupPending): P
   await setLoad($, l => ({ ...l, isWriting: false }))
   if (created instanceof CreatedUnknownError) {
     const where = created.message === '' ? '' : `（DB の ID: ${created.message}）`
-    $.ui.toast(`「${pending.title}」は作成されましたが、データソースの ID を読み取れませんでした${where}。setup をやり直さず、Notion でその DB を開き、URL を /config の notion-backlog の dataSource に入れてください`)
+    $.ui.toast(`「${pending.title}」は作成されましたが、データソースの ID を読み取れませんでした${where}。setup をやり直さず、Notion でその DB を開き、URL を /config の devlog の dataSource に入れてください`)
     return
   }
   if (created instanceof Error && isRefusedBeforeRun(created)) {
@@ -131,7 +131,7 @@ export async function confirmSetup($: EngineInterface, pending: SetupPending): P
   // The request may have reached Notion before it failed: a second setup
   // could make a second DB, so the person checks first.
   if (created instanceof Error) {
-    $.ui.toast(`作成結果を確認できませんでした（${errorText(created)}）。Notion に「${pending.title}」ができていないか確かめ、あればその DB の URL を /config の notion-backlog の dataSource に入れてください。無ければもう一度 /devlog setup を実行してください`)
+    $.ui.toast(`作成結果を確認できませんでした（${errorText(created)}）。Notion に「${pending.title}」ができていないか確かめ、あればその DB の URL を /config の devlog の dataSource に入れてください。無ければもう一度 /devlog setup を実行してください`)
     return
   }
   $.ui.toast(`「${pending.title}」を作りました。dataSource に設定して読み込み直します`)
@@ -140,5 +140,5 @@ export async function confirmSetup($: EngineInterface, pending: SetupPending): P
   // A save that throws ends like a refused one: the toast below says what
   // to do, with the id in it.
   const isSaved = await saveOption($, 'dataSource', created).catch(() => false)
-  if (!isSaved) $.ui.toast(`dataSource を保存できませんでした。/config の notion-backlog の dataSource に ${created} を入れてください`)
+  if (!isSaved) $.ui.toast(`dataSource を保存できませんでした。/config の devlog の dataSource に ${created} を入れてください`)
 }

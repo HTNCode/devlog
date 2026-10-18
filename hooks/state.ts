@@ -7,23 +7,23 @@ import type { Attachments, Branch, Draft, Issue, Load, Pending, Schema, Summary,
 // and follows `$` across files only into function declarations, so every
 // read and write of this mod's state goes through these functions.
 
-export const PANE = 'notion-backlog'
+export const PANE = 'devlog'
 
 type Fn<T> = (value: T) => T
 
-const issuesAtom = atom({ plugin: 'notion-backlog', key: 'issues' } as const, [] as Issue[])
-const tabAtom = atom({ plugin: 'notion-backlog', key: 'tab' } as const, 'open' as Tab)
-const viewAtom = atom({ plugin: 'notion-backlog', key: 'view' } as const, 'list' as View)
-const selectedAtom = atom({ plugin: 'notion-backlog', key: 'selected' } as const, null as string | null)
-const schemaAtom = atom({ plugin: 'notion-backlog', key: 'schema' } as const, null as Schema | null)
-const draftAtom = atom({ plugin: 'notion-backlog', key: 'draft' } as const, null as Draft | null)
-const pendingAtom = atom({ plugin: 'notion-backlog', key: 'pending' } as const, null as Pending | null)
-const branchAtom = atom({ plugin: 'notion-backlog', key: 'branch' } as const, null as Branch | null)
-const summariesAtom = atom({ plugin: 'notion-backlog', key: 'summaries' } as const, [] as Summary[])
-const openSummaryAtom = atom({ plugin: 'notion-backlog', key: 'openSummary' } as const, null as string | null)
-const attachmentsAtom = atom({ plugin: 'notion-backlog', key: 'attachments' } as const, null as Attachments | null)
-const notionServersAtom = atom({ plugin: 'notion-backlog', key: 'notionServers' } as const, [] as string[])
-const loadAtom = atom({ plugin: 'notion-backlog', key: 'load' } as const, {
+const issuesAtom = atom({ plugin: 'devlog', key: 'issues' } as const, [] as Issue[])
+const tabAtom = atom({ plugin: 'devlog', key: 'tab' } as const, 'open' as Tab)
+const viewAtom = atom({ plugin: 'devlog', key: 'view' } as const, 'list' as View)
+const selectedAtom = atom({ plugin: 'devlog', key: 'selected' } as const, null as string | null)
+const schemaAtom = atom({ plugin: 'devlog', key: 'schema' } as const, null as Schema | null)
+const draftAtom = atom({ plugin: 'devlog', key: 'draft' } as const, null as Draft | null)
+const pendingAtom = atom({ plugin: 'devlog', key: 'pending' } as const, null as Pending | null)
+const branchAtom = atom({ plugin: 'devlog', key: 'branch' } as const, null as Branch | null)
+const summariesAtom = atom({ plugin: 'devlog', key: 'summaries' } as const, [] as Summary[])
+const openSummaryAtom = atom({ plugin: 'devlog', key: 'openSummary' } as const, null as string | null)
+const attachmentsAtom = atom({ plugin: 'devlog', key: 'attachments' } as const, null as Attachments | null)
+const notionServersAtom = atom({ plugin: 'devlog', key: 'notionServers' } as const, [] as string[])
+const loadAtom = atom({ plugin: 'devlog', key: 'load' } as const, {
   isLoading: false,
   isWriting: false,
   error: null,

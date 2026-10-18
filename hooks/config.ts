@@ -92,9 +92,9 @@ export function dataSourceUrl(): string {
 }
 
 export const NOT_CONFIGURED =
-  'Notion の DB が未設定です。/devlog setup で新しく作るか、/config で notion-backlog の dataSource に DB の URL か ID を入れてください'
+  'Notion の DB が未設定です。/devlog setup で新しく作るか、/config で devlog の dataSource に DB の URL か ID を入れてください'
 
-const PLUGIN = 'notion-backlog'
+const PLUGIN = 'devlog'
 
 // Saves one of this plugin's options as the /config menu would; the module
 // then reloads with it, so the caller makes this its last step. The row is
