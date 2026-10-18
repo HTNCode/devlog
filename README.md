@@ -39,46 +39,46 @@ claude plugin install devlog --marketplace HTNCode/devlog
 
 既にあるDBを使うときは、インストール時の設定画面、または`/config`の`devlog`の項目で、次を設定します。
 
-| 項目 | 内容 | 既定値 |
-| --- | --- | --- |
-| `dataSource` | 課題DBのURL、またはデータソースID（`collection://…`）（必須） | なし |
-| `server` | NotionのMCPサーバー名。カンマ区切りで複数書ける | `claude.ai Notion` |
-| `propTitle`ほか | DBのプロパティ名（下の表） | 下の表 |
-| `statusTodo` / `statusDoing` / `statusDone` | 状態の選択肢の名前 | 未着手 / 進行中 / 完了 |
-| `ownerHuman` | 人の担当を示すラベルの名前 | 人間 |
+| 項目                                        | 内容                                                          | 既定値                 |
+| ------------------------------------------- | ------------------------------------------------------------- | ---------------------- |
+| `dataSource`                                | 課題DBのURL、またはデータソースID（`collection://…`）（必須） | なし                   |
+| `server`                                    | NotionのMCPサーバー名。カンマ区切りで複数書ける               | `claude.ai Notion`     |
+| `propTitle`ほか                             | DBのプロパティ名（下の表）                                    | 下の表                 |
+| `statusTodo` / `statusDoing` / `statusDone` | 状態の選択肢の名前                                            | 未着手 / 進行中 / 完了 |
+| `ownerHuman`                                | 人の担当を示すラベルの名前                                    | 人間                   |
 
 ブラウザのアドレス欄からコピーしたDBのURLには、データソースではなくデータベース本体のIDが入っています。その場合は最初の読み込みでNotionに問い合わせ、そのDBのデータソースに読み替えて使います（設定の値は書き換えません）。
 
 Claude Desktopでは、Notionのコネクタがターミナルとは別の名前（IDのような文字列）で接続されます。devlogは`server`に書いた名前にしか接続しません。`server`に無い名前で`notion-fetch`を持つ接続先が見つかると、候補としてペインに出すので、「〇〇を追加」を押して確定すると`server`に追加されます。別のMCPサーバーが同じ名前のツールを持っていても、確定するまでは何も送りません。
 
-auto モードで使う場合は、devlogが呼ぶNotionのツール（`notion-fetch`、`notion-query-data-sources`、`notion-update-page`、`notion-create-pages`など）を、`permissions.allow`に`mcp__<接続名>__<ツール名>`の形で入れてください。プラグインからの呼び出しはauto モードの分類器が判定できず、許可ルールが無いと拒否されます。
+autoモードで使う場合は、devlogが呼ぶNotionのツール（`notion-fetch`、`notion-query-data-sources`、`notion-update-page`、`notion-create-pages`など）を、`permissions.allow`に`mcp__<接続名>__<ツール名>`の形で入れてください。プラグインからの呼び出しはautoモードの分類器が判定できず、許可ルールが無いと拒否されます。
 
 DBには次の種類のプロパティが必要です。名前は設定で変えられます。名前や種類が合わないときは、読み取り専用で動きます。
 
-| 設定項目 | 既定の名前 | 種類 |
-| --- | --- | --- |
-| `propTitle` | タスク/プロジェクト名 | タイトル |
-| `propStatus` | ステータス | ステータス |
-| `propPriority` | 優先順位 | セレクト |
-| `propCategory` | カテゴリー | セレクト |
-| `propTags` | 案件タグ | マルチセレクト |
-| `propOwner` | 人間ラベル | ステータス |
-| `propStart` | 開始日 | 日付 |
-| `propEnd` | 終了日 | 日付 |
+| 設定項目       | 既定の名前            | 種類           |
+| -------------- | --------------------- | -------------- |
+| `propTitle`    | タスク/プロジェクト名 | タイトル       |
+| `propStatus`   | ステータス            | ステータス     |
+| `propPriority` | 優先順位              | セレクト       |
+| `propCategory` | カテゴリー            | セレクト       |
+| `propTags`     | 案件タグ              | マルチセレクト |
+| `propOwner`    | 人間ラベル            | ステータス     |
+| `propStart`    | 開始日                | 日付           |
+| `propEnd`      | 終了日                | 日付           |
 
 課題キーは、件名の中の`SEK-08`のような「英大文字で始まる英数字-数字」の部分から取ります。
 
 ## 使い方
 
-| コマンド | 動き |
-| --- | --- |
-| `/devlog` | 課題ペインを開く。開いていれば閉じる |
-| `/dl` | `/devlog`の短縮形（引数も同じ） |
-| `/devlog gantt` | ガントチャートを広めのペインで開く |
-| `/devlog new` | 起票フォームを開く |
-| `/devlog setup [ページのURL]` | 課題DBをNotionに作る（確定ボタンを押したときだけ作成） |
-| `/devlog list` / `week` / `doing` / `human` | 一覧をテキストで返す |
-| `/devlog refresh` | 読み込み直す |
+| コマンド                                    | 動き                                                   |
+| ------------------------------------------- | ------------------------------------------------------ |
+| `/devlog`                                   | 課題ペインを開く。開いていれば閉じる                   |
+| `/dl`                                       | `/devlog`の短縮形（引数も同じ）                        |
+| `/devlog gantt`                             | ガントチャートを広めのペインで開く                     |
+| `/devlog new`                               | 起票フォームを開く                                     |
+| `/devlog setup [ページのURL]`               | 課題DBをNotionに作る（確定ボタンを押したときだけ作成） |
+| `/devlog list` / `week` / `doing` / `human` | 一覧をテキストで返す                                   |
+| `/devlog refresh`                           | 読み込み直す                                           |
 
 ペインの中のキー: `1`〜`4`タブ、`g`ガントと一覧の切り替え、`r`更新、`n`起票、`c` URLコピー、`w`着手、`a`添付、`y`確定、`x`取消、`q`閉じる（要約が開いていれば要約から）。ガントでは`k` / `j`で選択、`h` / `l`で期限、`b` / `f`で期間を1日ずつ動かします。
 
