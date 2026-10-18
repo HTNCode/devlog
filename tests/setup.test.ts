@@ -10,9 +10,9 @@ const UNSET = { options: { dataSource: '' } }
 const PARENT = '1234abcd00004000800000000000a001'
 
 const PANE = {
-  plugin: 'notion-backlog',
+  plugin: 'devlog',
   component: 'Pane' as const,
-  requestId: 'notion-backlog',
+  requestId: 'devlog',
   props: {
     title: 'Devlog',
     isFocused: true,
@@ -68,7 +68,7 @@ test('/devlog setup creates the DB only after confirm and saves it as dataSource
   expect(created.length).toBe(1)
   expect(created[0]?.args['parent']).toEqual({ type: 'page_id', page_id: '1234abcd-0000-4000-8000-00000000a001' })
   expect(String(created[0]?.args['schema'])).toContain('MULTI_SELECT')
-  expect(saved).toEqual([`notion-backlog.dataSource=${CREATED_DB}`])
+  expect(saved).toEqual([`devlog.dataSource=${CREATED_DB}`])
   await ui.unmount()
 })
 
@@ -156,7 +156,7 @@ test('a create reply without the data source is read back through the new DB URL
   await $.command.run({ ...RUN, args: 'setup' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'confirm-yes' })
-  expect(saved).toEqual([`notion-backlog.dataSource=${CREATED_DB}`])
+  expect(saved).toEqual([`devlog.dataSource=${CREATED_DB}`])
   await ui.unmount()
 })
 

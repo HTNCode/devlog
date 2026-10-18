@@ -80,7 +80,7 @@ export type Summary = { pageId: string; status: 'loading' | 'ready' | 'error'; t
 
 declare module 'claude-code' {
   interface PluginState {
-    'notion-backlog': {
+    'devlog': {
       issues: Issue[]
       tab: Tab
       view: View

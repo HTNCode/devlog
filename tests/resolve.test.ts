@@ -11,9 +11,9 @@ const BROWSER_URL = 'https://app.notion.com/p/workspace/1234abcd000040008000' + 
 const SEK = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1'
 const DESKTOP = '00000000-0000-4000-8000-0000000000aa'
 const PANE = {
-  plugin: 'notion-backlog',
+  plugin: 'devlog',
   component: 'Pane' as const,
-  requestId: 'notion-backlog',
+  requestId: 'devlog',
   props: {
     title: 'Devlog',
     isFocused: true,
@@ -132,7 +132,7 @@ test('an unlisted connector is never called, only offered for confirmation', { o
   await ui.press({ key: `add-server-${DESKTOP}` })
   expect(saved.length).toBe(0)
   await ui.press({ key: 'confirm-yes' })
-  expect(saved).toEqual([`notion-backlog.server=claude.ai Notion, ${DESKTOP}`])
+  expect(saved).toEqual([`devlog.server=claude.ai Notion, ${DESKTOP}`])
   expect(servers.every(server => server === 'claude.ai Notion')).toBe(true)
   await ui.unmount()
 })

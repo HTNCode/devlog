@@ -9,7 +9,7 @@ const NOTION_FETCH = /^mcp__.+__notion-fetch$/
 const FETCH_SUFFIX = '__notion-fetch'
 
 export const NO_NOTION =
-  'このセッションでは Notion のコネクタにつながりません。/mcp で接続を確認してください。名前が違うときは、ペインに出る候補から接続先を追加するか、/config の notion-backlog の server にカンマ区切りで足してください'
+  'このセッションでは Notion のコネクタにつながりません。/mcp で接続を確認してください。名前が違うときは、ペインに出る候補から接続先を追加するか、/config の devlog の server にカンマ区切りで足してください'
 
 // The listed server a call last reached. The module's own: a reload asks again.
 let connected: string | null = null
@@ -109,5 +109,5 @@ export async function confirmServer($: EngineInterface, name: string): Promise<v
   await setLoad($, l => ({ ...l, isWriting: false }))
   // A save that throws ends like a refused one: the toast says what to do.
   const isSaved = await saveOption($, 'server', [...CONFIG.servers, name].join(', ')).catch(() => false)
-  if (!isSaved) $.ui.toast(`接続先を保存できませんでした。/config の notion-backlog の server に ${name} を足してください`)
+  if (!isSaved) $.ui.toast(`接続先を保存できませんでした。/config の devlog の server に ${name} を足してください`)
 }

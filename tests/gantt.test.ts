@@ -11,9 +11,9 @@ import { OPTS } from './fixtures'
 const NOW = Date.parse('2026-10-15T03:00:00Z')
 const SEK = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1'
 const PANE = {
-  plugin: 'notion-backlog',
+  plugin: 'devlog',
   component: 'Pane' as const,
-  requestId: 'notion-backlog',
+  requestId: 'devlog',
   props: {
     title: 'Devlog',
     isFocused: true,

@@ -24,9 +24,9 @@ const SCHEMA = {
 }
 
 const PANE = {
-  plugin: 'notion-backlog',
+  plugin: 'devlog',
   component: 'Pane' as const,
-  requestId: 'notion-backlog',
+  requestId: 'devlog',
   surface: 'terminal' as const,
   props: {
     title: 'Devlog',

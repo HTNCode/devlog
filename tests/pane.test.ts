@@ -9,9 +9,9 @@ const SEK = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1'
 const UX = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2'
 
 const PANE = {
-  plugin: 'notion-backlog',
+  plugin: 'devlog',
   component: 'Pane' as const,
-  requestId: 'notion-backlog',
+  requestId: 'devlog',
   props: {
     title: 'Devlog',
     isFocused: true,
