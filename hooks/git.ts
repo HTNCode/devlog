@@ -13,18 +13,21 @@ const MERGE = /(?:^|[\s;&|(])gh\s+pr\s+merge\b/
 // asks when either finds a merge, so a second reading can only add asks:
 // once as the shell splits it (shellSegments), and once with every escape and
 // quote stripped (flatSegments), for text another shell reads again, as in
-// `bash -c 'gh pr mer\<newline>ge'`. In a segment, flags may sit between gh,
-// pr and merge (`gh -R o/r pr merge`), and the REST merge endpoint counts
-// too, while `gh pr view && git merge` is no merge. A segment naming gh, pr
-// or api that takes words from elsewhere (`$m`, a backtick, eval, braces,
+// `bash -c 'gh pr mer\<newline>ge'`. In a segment, a merge is gh whose first
+// word past its flags is pr and whose next is merge (`gh -R o/r pr merge`),
+// so `gh pr create --body "please merge"` is none; the REST merge endpoint
+// counts too. When the command names gh, a segment naming gh, pr or api that
+// takes words from elsewhere (`$m`, a backtick, eval, brace expansion,
 // xargs) cannot be read, so it is asked too: `G=gh; $G pr merge` and
-// `echo merge | xargs gh pr` hide the merge from any one segment. This guards
-// ordinary calls, not a decoded script or a gh alias.
-const MERGE_GATES = [
-  /(?:^|[^\w-])gh\b[\s\S]*?\bpr\b[\s\S]*?\bmerge\b/,
-  /(?:^|[^\w-])gh\b[\s\S]*?\bapi\b[\s\S]*?\bpulls\/\d+\/merge\b/,
-]
-const OPAQUE = /\$|`|\{|\beval\b|\bxargs\b/
+// `echo merge | xargs gh pr` hide the merge from any one segment, while
+// `curl $URL/api` has no gh to ask about. This guards ordinary calls, not a
+// decoded script or a gh alias.
+const GH = /(?:^|[^\w-])gh\b/
+const GH_WORD = /(?:^|\/)gh$/
+const API_MERGE = /(?:^|[^\w-])gh\b[\s\S]*?\bapi\b[\s\S]*?\bpulls\/\d+\/merge\b/
+// -R / --repo is the one flag of gh pr that takes its value as the next word.
+const REPO_FLAGS = new Set(['-R', '--repo'])
+const OPAQUE = /\$|`|\{[^{}\s]*(?:,|\.\.)[^{}\s]*\}|\beval\b|\bxargs\b/
 const SEPARATORS = '\n;&|'
 export const MERGE_REASON = 'gh pr merge は人の承認が必要です（devlog）'
 
@@ -83,16 +86,39 @@ function flatSegments(command: string): string[] {
   return joined.replace(/["']/g, '').split(/[\n;&|]/)
 }
 
-function isGatedSegment(segment: string): boolean {
-  if (MERGE_GATES.some(gate => gate.test(segment))) return true
-  return OPAQUE.test(segment) && /\b(?:gh|pr|api)\b/.test(segment)
+// The first word at or after `from` that is not a flag (or a repo flag's
+// value); -1 when none is left.
+function nextWord(words: readonly string[], from: number): number {
+  let at = from
+  while (at < words.length) {
+    const word = words[at] ?? ''
+    if (!word.startsWith('-')) return at
+    at += REPO_FLAGS.has(word) ? 2 : 1
+  }
+  return -1
+}
+
+function runsPrMerge(segment: string): boolean {
+  const words = segment.split(/[\s;&|()]+/).filter(word => word !== '')
+  return words.some((word, at) => {
+    if (!GH_WORD.test(word)) return false
+    const pr = nextWord(words, at + 1)
+    return words[pr] === 'pr' && words[nextWord(words, pr + 1)] === 'merge'
+  })
+}
+
+function isGatedSegment(segment: string, namesGh: boolean): boolean {
+  if (runsPrMerge(segment) || API_MERGE.test(segment)) return true
+  return namesGh && OPAQUE.test(segment) && /\b(?:gh|pr|api)\b/.test(segment)
 }
 
 export function isMergeInput(input: unknown): boolean {
   if (typeof input !== 'object' || input === null || !('command' in input)) return false
   const command = input.command
   if (typeof command !== 'string') return false
-  return [...shellSegments(command), ...flatSegments(command)].some(isGatedSegment)
+  const segments = [...shellSegments(command), ...flatSegments(command)]
+  const namesGh = segments.some(segment => GH.test(segment))
+  return segments.some(segment => isGatedSegment(segment, namesGh))
 }
 
 // A commit moves an untouched issue to 進行中; a merged PR proposes 完了.
