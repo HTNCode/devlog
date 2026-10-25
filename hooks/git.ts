@@ -27,6 +27,10 @@ const GH_WORD = /(?:^|\/)gh$/
 const API_MERGE = /(?:^|[^\w-])gh\b[\s\S]*?\bapi\b[\s\S]*?\bpulls\/\d+\/merge\b/
 // -R / --repo is the one flag of gh pr that takes its value as the next word.
 const REPO_FLAGS = new Set(['-R', '--repo'])
+// The shell drops redirections from the arguments (`gh pr 2>/dev/null merge`
+// runs merge); a bare operator takes the next word as its target.
+const REDIRECT = /^\d*(?:<<<|<<|>>|<>|>\||[<>])(.*)$/
+const GLOB = /[*?[]/
 const OPAQUE = /\$|`|\{[^{}\s]*(?:,|\.\.)[^{}\s]*\}|\beval\b|\bxargs\b/
 const SEPARATORS = '\n;&|'
 export const MERGE_REASON = 'gh pr merge は人の承認が必要です（devlog）'
@@ -50,6 +54,11 @@ function readEscape(command: string, at: number, quote: string | null): { text: 
 // Only a separator outside quotes and not escaped ends a segment, so an
 // escaped backslash before a newline (`x\\<newline>gh pr merge`) still splits.
 // Quotes are dropped; backticks stay as the expansion they mark.
+// The & of `2>&1`, `<&0` and `&>out` belongs to a redirection, not a separator.
+function dropRedirectAmps(command: string): string {
+  return command.replace(/([<>])&/g, '$1').replace(/&>/g, '>')
+}
+
 function shellSegments(command: string): string[] {
   const segments: string[] = []
   let current = ''
@@ -98,12 +107,29 @@ function nextWord(words: readonly string[], from: number): number {
   return -1
 }
 
+function withoutRedirects(words: readonly string[]): string[] {
+  const kept: string[] = []
+  let at = 0
+  while (at < words.length) {
+    const word = words[at] ?? ''
+    const redirect = REDIRECT.exec(word)
+    if (redirect === null) kept.push(word)
+    at += redirect !== null && redirect[1] === '' ? 2 : 1
+  }
+  return kept
+}
+
+// A word the shell expands as a glob (`mer?e`) cannot be read, so it counts.
+function isWord(word: string | undefined, expected: string): boolean {
+  return word !== undefined && (word === expected || GLOB.test(word))
+}
+
 function runsPrMerge(segment: string): boolean {
-  const words = segment.split(/[\s;&|()]+/).filter(word => word !== '')
+  const words = withoutRedirects(segment.split(/[\s;&|()]+/).filter(word => word !== ''))
   return words.some((word, at) => {
     if (!GH_WORD.test(word)) return false
     const pr = nextWord(words, at + 1)
-    return words[pr] === 'pr' && words[nextWord(words, pr + 1)] === 'merge'
+    return isWord(words[pr], 'pr') && isWord(words[nextWord(words, pr + 1)], 'merge')
   })
 }
 
@@ -116,7 +142,8 @@ export function isMergeInput(input: unknown): boolean {
   if (typeof input !== 'object' || input === null || !('command' in input)) return false
   const command = input.command
   if (typeof command !== 'string') return false
-  const segments = [...shellSegments(command), ...flatSegments(command)]
+  const readable = dropRedirectAmps(command)
+  const segments = [...shellSegments(readable), ...flatSegments(readable)]
   const namesGh = segments.some(segment => GH.test(segment))
   return segments.some(segment => isGatedSegment(segment, namesGh))
 }
