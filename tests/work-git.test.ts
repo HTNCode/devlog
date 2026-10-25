@@ -3,7 +3,7 @@ import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import type { Issue } from '../types'
-import { gitEvent, pickIssue, targetStatus } from '../hooks/git'
+import { gitEvent, GH_REASON, pickIssue, targetStatus, usesGh } from '../hooks/git'
 import { ticketPrompt } from '../hooks/work'
 import type { FakeNotion } from './fixtures'
 import { BAND, fakeNotion, row, RUN } from './fixtures'
@@ -30,14 +30,24 @@ function fakeBash(on: On, isError: boolean): void {
 
 // Called through Reflect.apply: checking this literal against the whole
 // built-in tool union exceeds TypeScript's instantiation depth (TS2589).
-const COMMIT = { tool: 'Bash', command: 'git commit -m "wip"' } as const
+const COMMIT = 'git commit -m "wip"'
 
-async function commit($: Engine): Promise<void> {
+async function bash($: Engine, command: string): Promise<unknown> {
   const tool: unknown = Reflect.get($, 'tool')
   const call: unknown = typeof tool === 'object' && tool !== null ? Reflect.get(tool, 'call') : undefined
   if (typeof call !== 'function') throw new Error('$.tool.call is missing')
-  const ran: unknown = await Reflect.apply(call, tool, [COMMIT])
+  const ran: unknown = await Reflect.apply(call, tool, [{ tool: 'Bash', command }])
   expect(ran !== undefined).toBe(true)
+  return ran
+}
+
+async function commit($: Engine): Promise<void> {
+  await bash($, COMMIT)
+}
+
+function textOf(ran: unknown): string {
+  const text: unknown = typeof ran === 'object' && ran !== null ? Reflect.get(ran, 'text') : undefined
+  return typeof text === 'string' ? text : ''
 }
 
 async function start($: Engine): Promise<void> {
@@ -52,6 +62,37 @@ describe('git detection', () => {
     expect(gitEvent('gh pr merge 12 --squash')).toBe('merge')
     expect(gitEvent('git status')).toBe(null)
     expect(gitEvent('echo git commitment')).toBe(null)
+  })
+
+  test('asks for every command that uses gh, however the word is written', () => {
+    for (const command of [
+      'gh pr merge 3',
+      'gh pr view 3',
+      'git pull && gh pr merge 3',
+      '/opt/homebrew/bin/gh pr merge 3',
+      'GH_REPO=o/r gh pr merge 3',
+      'gh pr 2>/dev/null merge 3',
+      'bash -c "gh pr merge 3"',
+      'bash <<< "gh pr merge 3"',
+      'echo `gh pr merge 3`',
+      'g""h pr merge 3',
+      "g''h pr merge 3",
+      'g\\h pr merge 3',
+      'g\\\nh pr merge 3',
+      'echo x\\\\\ngh pr merge 3',
+      'G=gh; $G pr merge 3',
+      'echo merge | xargs gh pr',
+    ]) {
+      expect(usesGh({ command })).toBe(true)
+    }
+  })
+
+  test('leaves commands without gh alone', () => {
+    for (const command of ['git status', 'git merge main', 'git push origin gh-pages', 'cat .github/workflows/ci.yml', 'curl $URL/api/users', 'echo nogh']) {
+      expect(usesGh({ command })).toBe(false)
+    }
+    expect(usesGh({ command: 3 })).toBe(false)
+    expect(usesGh(null)).toBe(false)
   })
 
   test('proposes 進行中 on a commit and 完了 on a merge', () => {
@@ -105,6 +146,35 @@ test('a successful commit proposes 進行中 in the band, a failed one does not'
   await ui.press({ key: 'confirm-yes' })
   expect(fake.calls.filter(call => call.tool === 'notion-update-page').length).toBe(1)
   await ui.unmount()
+})
+
+describe('merge approval', () => {
+  test('a merge is put to a person, other commands keep the verdict beneath', OPTS, async ($, on) => {
+    on('tool.check', { tool: 'Bash' }, () => ({ decision: 'allow' as const }))
+    const merge = await $.tool.check({ tool: 'Bash', input: { command: 'gh pr merge 12 --squash' } })
+    expect(merge.decision).toBe('ask')
+    expect(merge.reason).toBe(GH_REASON)
+    const status = await $.tool.check({ tool: 'Bash', input: { command: 'git status' } })
+    expect(status.decision).toBe('allow')
+  })
+
+  // With nobody to ask, the merge's ask is refused while the allow beneath
+  // runs everything else. Neither a query nor this refusal tells
+  // `decider: 'person'` from a plain ask, so that part is checked in a live
+  // auto-mode session.
+  test('a merge nobody can approve is refused, other commands run', OPTS, async ($, on) => {
+    on('tool.check', { tool: 'Bash' }, () => ({ decision: 'allow' as const }))
+    fakeBash(on, false)
+    expect(textOf(await bash($, 'gh pr merge 12 --squash'))).toContain('denied')
+    expect(textOf(await bash($, 'git status'))).toBe('ok')
+  })
+
+  test('a deny beneath is not loosened to an ask', OPTS, async ($, on) => {
+    on('tool.check', { tool: 'Bash' }, () => ({ decision: 'deny' as const, reason: 'rule' }))
+    const merge = await $.tool.check({ tool: 'Bash', input: { command: 'gh pr merge 12' } })
+    expect(merge.decision).toBe('deny')
+    expect(merge.reason).toBe('rule')
+  })
 })
 
 test('a failed commit proposes nothing', OPTS, async ($, on) => {
