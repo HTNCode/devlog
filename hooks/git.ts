@@ -9,31 +9,18 @@ export type GitEvent = 'commit' | 'merge'
 
 const COMMIT = /(?:^|[\s;&|(])git\s+(?:-C\s+\S+\s+)?commit\b/
 const MERGE = /(?:^|[\s;&|(])gh\s+pr\s+merge\b/
-// The approval gate errs towards asking. It reads the command two ways and
-// asks when either finds a merge, so a second reading can only add asks:
-// once as the shell splits it (shellSegments), and once with every escape and
-// quote stripped (flatSegments), for text another shell reads again, as in
-// `bash -c 'gh pr mer\<newline>ge'`. In a segment, a merge is gh whose first
-// word past its flags is pr and whose next is merge (`gh -R o/r pr merge`),
-// so `gh pr create --body "please merge"` is none; the REST merge endpoint
-// counts too. When the command names gh, a segment naming gh, pr or api that
-// takes words from elsewhere (`$m`, a backtick, eval, brace expansion,
-// xargs) cannot be read, so it is asked too: `G=gh; $G pr merge` and
-// `echo merge | xargs gh pr` hide the merge from any one segment, while
-// `curl $URL/api` has no gh to ask about. This guards ordinary calls, not a
-// decoded script or a gh alias.
-const GH = /(?:^|[^\w-])gh\b/
-const GH_WORD = /(?:^|\/)gh$/
-const API_MERGE = /(?:^|[^\w-])gh\b[\s\S]*?\bapi\b[\s\S]*?\bpulls\/\d+\/merge\b/
-// -R / --repo is the one flag of gh pr that takes its value as the next word.
-const REPO_FLAGS = new Set(['-R', '--repo'])
-// The shell drops redirections from the arguments (`gh pr 2>/dev/null merge`
-// runs merge); a bare operator takes the next word as its target.
-const REDIRECT = /^\d*(?:<<<|<<|>>|<>|>\||[<>])(.*)$/
-const GLOB = /[*?[]/
-const OPAQUE = /\$|`|\{[^{}\s]*(?:,|\.\.)[^{}\s]*\}|\beval\b|\bxargs\b/
+// The approval gate asks for every command that uses gh. Telling a merge apart
+// within shell syntax kept failing (flags, redirections, here-strings,
+// variables and xargs each hid one), so it only looks for the word gh. The
+// word is looked for in the command as written, as the shell splits it
+// (shellSegments) and with every escape and quote stripped (flatSegments),
+// so `g""h`, `g\h` and a line continuation inside gh still count; a further
+// reading can only add asks. gh-pages and .github are other words. This
+// guards ordinary calls, not gh assembled from pieces (`$a$b`), a decoded
+// script or an alias.
+const GH_WORD = /(?:^|[^\w-])gh(?![\w-])/
 const SEPARATORS = '\n;&|'
-export const MERGE_REASON = 'gh pr merge は人の承認が必要です（devlog）'
+export const GH_REASON = 'gh を使うコマンドは人の承認が必要です（devlog）'
 
 export function gitEvent(command: string): GitEvent | null {
   if (MERGE.test(command)) return 'merge'
@@ -52,13 +39,8 @@ function readEscape(command: string, at: number, quote: string | null): { text: 
 }
 
 // Only a separator outside quotes and not escaped ends a segment, so an
-// escaped backslash before a newline (`x\\<newline>gh pr merge`) still splits.
-// Quotes are dropped; backticks stay as the expansion they mark.
-// The & of `2>&1`, `<&0` and `&>out` belongs to a redirection, not a separator.
-function dropRedirectAmps(command: string): string {
-  return command.replace(/([<>])&/g, '$1').replace(/&>/g, '>')
-}
-
+// escaped backslash before a newline (`x\\<newline>gh`) still splits.
+// Quotes are dropped.
 function shellSegments(command: string): string[] {
   const segments: string[] = []
   let current = ''
@@ -95,49 +77,11 @@ function flatSegments(command: string): string[] {
   return joined.replace(/["']/g, '').split(/[\n;&|]/)
 }
 
-// The first word at or after `from` that is neither a flag (with a repo
-// flag's value) nor a redirection (with a bare operator's target); -1 when
-// none is left. Redirections are skipped only here, past gh: dropping them
-// from the whole command would drop gh from `bash <<< "gh pr merge"` too.
-function nextWord(words: readonly string[], from: number): number {
-  let at = from
-  while (at < words.length) {
-    const word = words[at] ?? ''
-    const redirect = REDIRECT.exec(word)
-    if (redirect !== null) at += redirect[1] === '' ? 2 : 1
-    else if (word.startsWith('-')) at += REPO_FLAGS.has(word) ? 2 : 1
-    else return at
-  }
-  return -1
-}
-
-// A word the shell expands as a glob (`mer?e`) cannot be read, so it counts.
-function isWord(word: string | undefined, expected: string): boolean {
-  return word !== undefined && (word === expected || GLOB.test(word))
-}
-
-function runsPrMerge(segment: string): boolean {
-  const words = segment.split(/[\s;&|()]+/).filter(word => word !== '')
-  return words.some((word, at) => {
-    if (!GH_WORD.test(word)) return false
-    const pr = nextWord(words, at + 1)
-    return isWord(words[pr], 'pr') && isWord(words[nextWord(words, pr + 1)], 'merge')
-  })
-}
-
-function isGatedSegment(segment: string, namesGh: boolean): boolean {
-  if (runsPrMerge(segment) || API_MERGE.test(segment)) return true
-  return namesGh && OPAQUE.test(segment) && /\b(?:gh|pr|api)\b/.test(segment)
-}
-
-export function isMergeInput(input: unknown): boolean {
+export function usesGh(input: unknown): boolean {
   if (typeof input !== 'object' || input === null || !('command' in input)) return false
   const command = input.command
   if (typeof command !== 'string') return false
-  const readable = dropRedirectAmps(command)
-  const segments = [...shellSegments(readable), ...flatSegments(readable)]
-  const namesGh = segments.some(segment => GH.test(segment))
-  return segments.some(segment => isGatedSegment(segment, namesGh))
+  return [command, ...shellSegments(command), ...flatSegments(command)].some(text => GH_WORD.test(text))
 }
 
 // A commit moves an untouched issue to 進行中; a merged PR proposes 完了.
@@ -193,12 +137,12 @@ export function registerGit(on: On): void {
     return ran
   }).catch(($, e, next) => next(e))
 
-  // A merge lands the PR and proposes 完了, so even in auto mode a person
-  // approves it: `decider: 'person'` is settled by no classifier's allow, and
-  // is a deny where nobody can be asked. A deny beneath still stands.
+  // gh can merge a PR, which proposes 完了, so even in auto mode a person
+  // approves every gh call: `decider: 'person'` is settled by no classifier's
+  // allow, and is a deny where nobody can be asked. A deny beneath still stands.
   on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
     const verdict = await next(e)
-    if (verdict.decision === 'deny' || !isMergeInput(e.input)) return verdict
-    return { decision: 'ask', decider: 'person', reason: MERGE_REASON }
-  }).catch(($, e, next) => (isMergeInput(e.input) ? { decision: 'deny', reason: MERGE_REASON } : next(e)))
+    if (verdict.decision === 'deny' || !usesGh(e.input)) return verdict
+    return { decision: 'ask', decider: 'person', reason: GH_REASON }
+  }).catch(($, e, next) => (usesGh(e.input) ? { decision: 'deny', reason: GH_REASON } : next(e)))
 }

@@ -3,7 +3,7 @@ import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import type { Issue } from '../types'
-import { gitEvent, isMergeInput, MERGE_REASON, pickIssue, targetStatus } from '../hooks/git'
+import { gitEvent, GH_REASON, pickIssue, targetStatus, usesGh } from '../hooks/git'
 import { ticketPrompt } from '../hooks/work'
 import type { FakeNotion } from './fixtures'
 import { BAND, fakeNotion, row, RUN } from './fixtures'
@@ -64,57 +64,35 @@ describe('git detection', () => {
     expect(gitEvent('echo git commitment')).toBe(null)
   })
 
-  test('reads a merge only from a Bash input with a command string', () => {
-    expect(isMergeInput({ command: 'git pull && gh pr merge 3' })).toBe(true)
-    expect(isMergeInput({ command: '/opt/homebrew/bin/gh pr merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh -R HTNCode/x pr merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh --repo HTNCode/x pr -R y merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'bash -c "gh pr merge 3"' })).toBe(true)
-    expect(isMergeInput({ command: 'echo `gh pr merge 3`' })).toBe(true)
-    expect(isMergeInput({ command: 'GH_REPO=o/r gh pr merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh api -X PUT repos/o/r/pulls/3/merge' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr \\\nmerge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh \\\n  -R o/r \\\n  pr \\\n  merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr mer\\\nge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr m\\erge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr {merge,} 3' })).toBe(true)
-    expect(isMergeInput({ command: 'echo x\\\\\ngh pr merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'echo "x\\\\"\ngh pr merge 3' })).toBe(true)
-    expect(isMergeInput({ command: "bash -c 'gh pr mer\\\nge 3'" })).toBe(true)
-    expect(isMergeInput({ command: 'G=gh; $G pr merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'P=pr; gh $P merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'echo merge | xargs gh pr' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr view 3 --body "a;b"' })).toBe(false)
-    expect(isMergeInput({ command: 'git merge $BRANCH' })).toBe(false)
-    expect(isMergeInput({ command: 'curl $URL/api/users' })).toBe(false)
-    expect(isMergeInput({ command: 'gh pr create --title x --body "please merge after review"' })).toBe(false)
-    expect(isMergeInput({ command: 'gh pr comment 3 --body "merge?"' })).toBe(false)
-    expect(isMergeInput({ command: "gh api repos/o/r/pulls --jq '.[] | {n: .number}'" })).toBe(false)
-    expect(isMergeInput({ command: 'bash -c "gh pr view 1; gh pr merge 2"' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr --repo=o/r merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr 2>/dev/null merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr > log merge 3' })).toBe(true)
-    expect(isMergeInput({ command: '>out gh pr merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr &>/dev/null merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr 2>&1 merge 3' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr mer?e 3' })).toBe(true)
-    expect(isMergeInput({ command: 'bash <<< "gh pr merge 3"' })).toBe(true)
-    expect(isMergeInput({ command: "sh <<< 'gh pr merge 3'" })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr > merge' })).toBe(false)
-    expect(isMergeInput({ command: 'gh pr view 3 2>&1 | grep merge' })).toBe(false)
-    expect(isMergeInput({ command: 'gh pr mer""ge 3' })).toBe(true)
-    expect(isMergeInput({ command: "gh pr 'merge' 3" })).toBe(true)
-    expect(isMergeInput({ command: 'm=merge; gh pr $m 3' })).toBe(true)
-    expect(isMergeInput({ command: 'eval "gh pr $(echo merge) 3"' })).toBe(true)
-    expect(isMergeInput({ command: 'gh pr view 3\ngit merge main' })).toBe(false)
-    expect(isMergeInput({ command: 'echo $HOME && gh pr list' })).toBe(false)
-    expect(isMergeInput({ command: 'gh pr view 3' })).toBe(false)
-    expect(isMergeInput({ command: "gh pr view 3 --jq '.[0]'" })).toBe(false)
-    expect(isMergeInput({ command: 'echo nogh pr merge' })).toBe(false)
-    expect(isMergeInput({ command: 'gh pr view 3 && git merge main' })).toBe(false)
-    expect(isMergeInput({ command: 'gh pr view 3 --json mergeable' })).toBe(false)
-    expect(isMergeInput({ command: 3 })).toBe(false)
-    expect(isMergeInput(null)).toBe(false)
+  test('asks for every command that uses gh, however the word is written', () => {
+    for (const command of [
+      'gh pr merge 3',
+      'gh pr view 3',
+      'git pull && gh pr merge 3',
+      '/opt/homebrew/bin/gh pr merge 3',
+      'GH_REPO=o/r gh pr merge 3',
+      'gh pr 2>/dev/null merge 3',
+      'bash -c "gh pr merge 3"',
+      'bash <<< "gh pr merge 3"',
+      'echo `gh pr merge 3`',
+      'g""h pr merge 3',
+      "g''h pr merge 3",
+      'g\\h pr merge 3',
+      'g\\\nh pr merge 3',
+      'echo x\\\\\ngh pr merge 3',
+      'G=gh; $G pr merge 3',
+      'echo merge | xargs gh pr',
+    ]) {
+      expect(usesGh({ command })).toBe(true)
+    }
+  })
+
+  test('leaves commands without gh alone', () => {
+    for (const command of ['git status', 'git merge main', 'git push origin gh-pages', 'cat .github/workflows/ci.yml', 'curl $URL/api/users', 'echo nogh']) {
+      expect(usesGh({ command })).toBe(false)
+    }
+    expect(usesGh({ command: 3 })).toBe(false)
+    expect(usesGh(null)).toBe(false)
   })
 
   test('proposes 進行中 on a commit and 完了 on a merge', () => {
@@ -175,7 +153,7 @@ describe('merge approval', () => {
     on('tool.check', { tool: 'Bash' }, () => ({ decision: 'allow' as const }))
     const merge = await $.tool.check({ tool: 'Bash', input: { command: 'gh pr merge 12 --squash' } })
     expect(merge.decision).toBe('ask')
-    expect(merge.reason).toBe(MERGE_REASON)
+    expect(merge.reason).toBe(GH_REASON)
     const status = await $.tool.check({ tool: 'Bash', input: { command: 'git status' } })
     expect(status.decision).toBe('allow')
   })
