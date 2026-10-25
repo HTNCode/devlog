@@ -3,7 +3,7 @@ import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import type { Issue } from '../types'
-import { gitEvent, pickIssue, targetStatus } from '../hooks/git'
+import { gitEvent, isMergeInput, MERGE_REASON, pickIssue, targetStatus } from '../hooks/git'
 import { ticketPrompt } from '../hooks/work'
 import type { FakeNotion } from './fixtures'
 import { BAND, fakeNotion, row, RUN } from './fixtures'
@@ -30,14 +30,24 @@ function fakeBash(on: On, isError: boolean): void {
 
 // Called through Reflect.apply: checking this literal against the whole
 // built-in tool union exceeds TypeScript's instantiation depth (TS2589).
-const COMMIT = { tool: 'Bash', command: 'git commit -m "wip"' } as const
+const COMMIT = 'git commit -m "wip"'
 
-async function commit($: Engine): Promise<void> {
+async function bash($: Engine, command: string): Promise<unknown> {
   const tool: unknown = Reflect.get($, 'tool')
   const call: unknown = typeof tool === 'object' && tool !== null ? Reflect.get(tool, 'call') : undefined
   if (typeof call !== 'function') throw new Error('$.tool.call is missing')
-  const ran: unknown = await Reflect.apply(call, tool, [COMMIT])
+  const ran: unknown = await Reflect.apply(call, tool, [{ tool: 'Bash', command }])
   expect(ran !== undefined).toBe(true)
+  return ran
+}
+
+async function commit($: Engine): Promise<void> {
+  await bash($, COMMIT)
+}
+
+function textOf(ran: unknown): string {
+  const text: unknown = typeof ran === 'object' && ran !== null ? Reflect.get(ran, 'text') : undefined
+  return typeof text === 'string' ? text : ''
 }
 
 async function start($: Engine): Promise<void> {
@@ -52,6 +62,31 @@ describe('git detection', () => {
     expect(gitEvent('gh pr merge 12 --squash')).toBe('merge')
     expect(gitEvent('git status')).toBe(null)
     expect(gitEvent('echo git commitment')).toBe(null)
+  })
+
+  test('reads a merge only from a Bash input with a command string', () => {
+    expect(isMergeInput({ command: 'git pull && gh pr merge 3' })).toBe(true)
+    expect(isMergeInput({ command: '/opt/homebrew/bin/gh pr merge 3' })).toBe(true)
+    expect(isMergeInput({ command: 'gh -R HTNCode/x pr merge 3' })).toBe(true)
+    expect(isMergeInput({ command: 'gh --repo HTNCode/x pr -R y merge 3' })).toBe(true)
+    expect(isMergeInput({ command: 'bash -c "gh pr merge 3"' })).toBe(true)
+    expect(isMergeInput({ command: 'echo `gh pr merge 3`' })).toBe(true)
+    expect(isMergeInput({ command: 'GH_REPO=o/r gh pr merge 3' })).toBe(true)
+    expect(isMergeInput({ command: 'gh api -X PUT repos/o/r/pulls/3/merge' })).toBe(true)
+    expect(isMergeInput({ command: 'gh pr \\\nmerge 3' })).toBe(true)
+    expect(isMergeInput({ command: 'gh \\\n  -R o/r \\\n  pr \\\n  merge 3' })).toBe(true)
+    expect(isMergeInput({ command: 'gh pr mer""ge 3' })).toBe(true)
+    expect(isMergeInput({ command: "gh pr 'merge' 3" })).toBe(true)
+    expect(isMergeInput({ command: 'm=merge; gh pr $m 3' })).toBe(true)
+    expect(isMergeInput({ command: 'eval "gh pr $(echo merge) 3"' })).toBe(true)
+    expect(isMergeInput({ command: 'gh pr view 3\ngit merge main' })).toBe(false)
+    expect(isMergeInput({ command: 'echo $HOME && gh pr list' })).toBe(false)
+    expect(isMergeInput({ command: 'gh pr view 3' })).toBe(false)
+    expect(isMergeInput({ command: 'echo nogh pr merge' })).toBe(false)
+    expect(isMergeInput({ command: 'gh pr view 3 && git merge main' })).toBe(false)
+    expect(isMergeInput({ command: 'gh pr view 3 --json mergeable' })).toBe(false)
+    expect(isMergeInput({ command: 3 })).toBe(false)
+    expect(isMergeInput(null)).toBe(false)
   })
 
   test('proposes 進行中 on a commit and 完了 on a merge', () => {
@@ -105,6 +140,35 @@ test('a successful commit proposes 進行中 in the band, a failed one does not'
   await ui.press({ key: 'confirm-yes' })
   expect(fake.calls.filter(call => call.tool === 'notion-update-page').length).toBe(1)
   await ui.unmount()
+})
+
+describe('merge approval', () => {
+  test('a merge is put to a person, other commands keep the verdict beneath', OPTS, async ($, on) => {
+    on('tool.check', { tool: 'Bash' }, () => ({ decision: 'allow' as const }))
+    const merge = await $.tool.check({ tool: 'Bash', input: { command: 'gh pr merge 12 --squash' } })
+    expect(merge.decision).toBe('ask')
+    expect(merge.reason).toBe(MERGE_REASON)
+    const status = await $.tool.check({ tool: 'Bash', input: { command: 'git status' } })
+    expect(status.decision).toBe('allow')
+  })
+
+  // With nobody to ask, the merge's ask is refused while the allow beneath
+  // runs everything else. Neither a query nor this refusal tells
+  // `decider: 'person'` from a plain ask, so that part is checked in a live
+  // auto-mode session.
+  test('a merge nobody can approve is refused, other commands run', OPTS, async ($, on) => {
+    on('tool.check', { tool: 'Bash' }, () => ({ decision: 'allow' as const }))
+    fakeBash(on, false)
+    expect(textOf(await bash($, 'gh pr merge 12 --squash'))).toContain('denied')
+    expect(textOf(await bash($, 'git status'))).toBe('ok')
+  })
+
+  test('a deny beneath is not loosened to an ask', OPTS, async ($, on) => {
+    on('tool.check', { tool: 'Bash' }, () => ({ decision: 'deny' as const, reason: 'rule' }))
+    const merge = await $.tool.check({ tool: 'Bash', input: { command: 'gh pr merge 12' } })
+    expect(merge.decision).toBe('deny')
+    expect(merge.reason).toBe('rule')
+  })
 })
 
 test('a failed commit proposes nothing', OPTS, async ($, on) => {

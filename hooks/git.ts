@@ -9,10 +9,42 @@ export type GitEvent = 'commit' | 'merge'
 
 const COMMIT = /(?:^|[\s;&|(])git\s+(?:-C\s+\S+\s+)?commit\b/
 const MERGE = /(?:^|[\s;&|(])gh\s+pr\s+merge\b/
+// The approval gate errs towards asking. It reads the command with line
+// continuations joined and quotes dropped (`mer""ge`), then each segment
+// between separators: flags may sit between gh, pr and merge (`gh -R o/r pr
+// merge`), and the REST merge endpoint counts too, while `gh pr view && git
+// merge` is no merge. A gh pr or gh api segment built from an expansion
+// (`$m`, a backtick, eval) cannot be read, so it is asked too. This guards
+// ordinary calls, not a decoded script or a gh alias.
+const GH = /(?:^|[^\w-])gh\b/
+const MERGE_GATES = [
+  /(?:^|[^\w-])gh\b.*?\bpr\b.*?\bmerge\b/,
+  /(?:^|[^\w-])gh\b.*?\bapi\b.*?\bpulls\/\d+\/merge\b/,
+]
+const OPAQUE = /\$|`|\beval\b/
+export const MERGE_REASON = 'gh pr merge は人の承認が必要です（devlog）'
 
 export function gitEvent(command: string): GitEvent | null {
   if (MERGE.test(command)) return 'merge'
   return COMMIT.test(command) ? 'commit' : null
+}
+
+function gateSegments(command: string): string[] {
+  const joined = command.replace(/\\\r?\n/g, ' ')
+  // Backticks stay: they mark an expansion the gate cannot read.
+  return joined.replace(/["']/g, '').split(/[\n;&|]/)
+}
+
+function isGatedSegment(segment: string): boolean {
+  if (!GH.test(segment)) return false
+  if (MERGE_GATES.some(gate => gate.test(segment))) return true
+  return OPAQUE.test(segment) && /\b(?:pr|api)\b/.test(segment)
+}
+
+export function isMergeInput(input: unknown): boolean {
+  if (typeof input !== 'object' || input === null || !('command' in input)) return false
+  const command = input.command
+  return typeof command === 'string' && gateSegments(command).some(isGatedSegment)
 }
 
 // A commit moves an untouched issue to 進行中; a merged PR proposes 完了.
@@ -67,4 +99,13 @@ export function registerGit(on: On): void {
     }
     return ran
   }).catch(($, e, next) => next(e))
+
+  // A merge lands the PR and proposes 完了, so even in auto mode a person
+  // approves it: `decider: 'person'` is settled by no classifier's allow, and
+  // is a deny where nobody can be asked. A deny beneath still stands.
+  on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
+    const verdict = await next(e)
+    if (verdict.decision === 'deny' || !isMergeInput(e.input)) return verdict
+    return { decision: 'ask', decider: 'person', reason: MERGE_REASON }
+  }).catch(($, e, next) => (isMergeInput(e.input) ? { decision: 'deny', reason: MERGE_REASON } : next(e)))
 }
