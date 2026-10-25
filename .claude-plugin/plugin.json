@@ -1,6 +1,6 @@
 {
   "name": "devlog",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Notion の課題 DB を土台にした Backlog 風チケット管理（/devlog: 課題一覧ペイン、要約、現在の課題の帯、ガントチャート、Git 連動、添付。Notion への書き込みは確定ボタン経由）",
   "types": "./types/index.d.ts",
   "userConfig": {
