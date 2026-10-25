@@ -8,6 +8,7 @@ Notionの課題DBを土台にしたチケット管理modです。Claude Codeの�
 - 「着手」でチケットを引用した文章をプロンプトに入れる（送信はしない）
 - ガントチャートで期間を表示し、キーやドラッグで期限を変更（状態ごとの色分け、今日の線、週の区切り付き）
 - Claudeが実行した`git commit` / `gh pr merge`を検知して状態変更を提案
+- Claudeが実行する`gh pr merge`は、autoモードでも人が権限ダイアログで承認しないと実行されない
 - 添付ファイルの一覧・保存・画像プレビュー・アップロード
 - 起票フォーム（必須項目がそろうまで確定できない）
 - `/devlog setup`で、必要なプロパティがそろった課題DBをNotionに作成
@@ -52,6 +53,8 @@ claude plugin install devlog --marketplace HTNCode/devlog
 Claude Desktopでは、Notionのコネクタがターミナルとは別の名前（IDのような文字列）で接続されます。devlogは`server`に書いた名前にしか接続しません。`server`に無い名前で`notion-fetch`を持つ接続先が見つかると、候補としてペインに出すので、「〇〇を追加」を押して確定すると`server`に追加されます。別のMCPサーバーが同じ名前のツールを持っていても、確定するまでは何も送りません。
 
 autoモードで使う場合は、devlogが呼ぶNotionのツール（`notion-fetch`、`notion-query-data-sources`、`notion-update-page`、`notion-create-pages`など）を、`permissions.allow`に`mcp__<接続名>__<ツール名>`の形で入れてください。プラグインからの呼び出しはautoモードの分類器が判定できず、許可ルールが無いと拒否されます。
+
+PRのマージは課題を完了にする操作なので、devlogは、Claudeが実行する`gh pr merge`をautoモードの分類器では通さず、必ず人に確認します（Claude Code 2.1.304以降）。`gh -R owner/repo pr merge`のようにフラグを挟んだ書き方、行末の`\`で次の行へ続けた書き方、`gh api …/pulls/<番号>/merge`も対象です。変数や`$(…)`で組み立てた`gh pr` / `gh api`のコマンドは、中身を読めないので同じく確認します。人に確認できない実行（`claude -p`など）では拒否されます。`gh`のエイリアスや、スクリプトに書いてから実行したマージは見分けられません。
 
 DBには次の種類のプロパティが必要です。名前は設定で変えられます。名前や種類が合わないときは、読み取り専用で動きます。
 
