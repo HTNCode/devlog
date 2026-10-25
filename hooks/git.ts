@@ -9,21 +9,23 @@ export type GitEvent = 'commit' | 'merge'
 
 const COMMIT = /(?:^|[\s;&|(])git\s+(?:-C\s+\S+\s+)?commit\b/
 const MERGE = /(?:^|[\s;&|(])gh\s+pr\s+merge\b/
-// The approval gate errs towards asking. It reads the command as the shell
-// would join it: a line continuation is removed outright (`mer\<newline>ge`
-// runs merge), a backslash escape keeps its character (`m\erge`) and quotes
-// are dropped (`mer""ge`); then each segment between separators: flags may
-// sit between gh, pr and merge (`gh -R o/r pr merge`), and the REST merge
-// endpoint counts too, while `gh pr view && git merge` is no merge. A gh pr
-// or gh api segment built from an expansion (`$m`, a backtick, eval, braces)
-// cannot be read, so it is asked too. This guards ordinary calls, not a
-// decoded script or a gh alias.
-const GH = /(?:^|[^\w-])gh\b/
+// The approval gate errs towards asking. It reads the command two ways and
+// asks when either finds a merge, so a second reading can only add asks:
+// once as the shell splits it (shellSegments), and once with every escape and
+// quote stripped (flatSegments), for text another shell reads again, as in
+// `bash -c 'gh pr mer\<newline>ge'`. In a segment, flags may sit between gh,
+// pr and merge (`gh -R o/r pr merge`), and the REST merge endpoint counts
+// too, while `gh pr view && git merge` is no merge. A segment naming gh, pr
+// or api that takes words from elsewhere (`$m`, a backtick, eval, braces,
+// xargs) cannot be read, so it is asked too: `G=gh; $G pr merge` and
+// `echo merge | xargs gh pr` hide the merge from any one segment. This guards
+// ordinary calls, not a decoded script or a gh alias.
 const MERGE_GATES = [
-  /(?:^|[^\w-])gh\b.*?\bpr\b.*?\bmerge\b/,
-  /(?:^|[^\w-])gh\b.*?\bapi\b.*?\bpulls\/\d+\/merge\b/,
+  /(?:^|[^\w-])gh\b[\s\S]*?\bpr\b[\s\S]*?\bmerge\b/,
+  /(?:^|[^\w-])gh\b[\s\S]*?\bapi\b[\s\S]*?\bpulls\/\d+\/merge\b/,
 ]
-const OPAQUE = /\$|`|\{|\beval\b/
+const OPAQUE = /\$|`|\{|\beval\b|\bxargs\b/
+const SEPARATORS = '\n;&|'
 export const MERGE_REASON = 'gh pr merge は人の承認が必要です（devlog）'
 
 export function gitEvent(command: string): GitEvent | null {
@@ -31,22 +33,66 @@ export function gitEvent(command: string): GitEvent | null {
   return COMMIT.test(command) ? 'commit' : null
 }
 
-function gateSegments(command: string): string[] {
+// A backslash at `at`: a line continuation vanishes, an escaped character is
+// kept as text. Inside double quotes the backslash escapes only $ ` " \.
+function readEscape(command: string, at: number, quote: string | null): { text: string; next: number } {
+  const escaped = command[at + 1]
+  if (escaped === undefined) return { text: '\\', next: at + 1 }
+  if (escaped === '\n') return { text: '', next: at + 2 }
+  if (escaped === '\r' && command[at + 2] === '\n') return { text: '', next: at + 3 }
+  const kept = quote === '"' && !'$`"\\'.includes(escaped) ? '\\' : ''
+  return { text: kept + escaped, next: at + 2 }
+}
+
+// Only a separator outside quotes and not escaped ends a segment, so an
+// escaped backslash before a newline (`x\\<newline>gh pr merge`) still splits.
+// Quotes are dropped; backticks stay as the expansion they mark.
+function shellSegments(command: string): string[] {
+  const segments: string[] = []
+  let current = ''
+  let quote: string | null = null
+  let at = 0
+  while (at < command.length) {
+    const char = command[at] ?? ''
+    if (quote === "'") {
+      if (char === "'") quote = null
+      else current += char
+      at++
+    } else if (char === '\\') {
+      const { text, next } = readEscape(command, at, quote)
+      current += text
+      at = next
+    } else if (char === '"' || char === "'") {
+      quote = quote === char ? null : (quote ?? char)
+      at++
+    } else if (quote === null && SEPARATORS.includes(char)) {
+      segments.push(current)
+      current = ''
+      at++
+    } else {
+      current += char
+      at++
+    }
+  }
+  segments.push(current)
+  return segments
+}
+
+function flatSegments(command: string): string[] {
   const joined = command.replace(/\\\r?\n/g, '').replace(/\\(.)/g, '$1')
-  // Backticks stay: they mark an expansion the gate cannot read.
   return joined.replace(/["']/g, '').split(/[\n;&|]/)
 }
 
 function isGatedSegment(segment: string): boolean {
-  if (!GH.test(segment)) return false
   if (MERGE_GATES.some(gate => gate.test(segment))) return true
-  return OPAQUE.test(segment) && /\b(?:pr|api)\b/.test(segment)
+  return OPAQUE.test(segment) && /\b(?:gh|pr|api)\b/.test(segment)
 }
 
 export function isMergeInput(input: unknown): boolean {
   if (typeof input !== 'object' || input === null || !('command' in input)) return false
   const command = input.command
-  return typeof command === 'string' && gateSegments(command).some(isGatedSegment)
+  if (typeof command !== 'string') return false
+  return [...shellSegments(command), ...flatSegments(command)].some(isGatedSegment)
 }
 
 // A commit moves an untouched issue to 進行中; a merged PR proposes 完了.
