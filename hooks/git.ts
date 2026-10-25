@@ -95,28 +95,20 @@ function flatSegments(command: string): string[] {
   return joined.replace(/["']/g, '').split(/[\n;&|]/)
 }
 
-// The first word at or after `from` that is not a flag (or a repo flag's
-// value); -1 when none is left.
+// The first word at or after `from` that is neither a flag (with a repo
+// flag's value) nor a redirection (with a bare operator's target); -1 when
+// none is left. Redirections are skipped only here, past gh: dropping them
+// from the whole command would drop gh from `bash <<< "gh pr merge"` too.
 function nextWord(words: readonly string[], from: number): number {
   let at = from
   while (at < words.length) {
     const word = words[at] ?? ''
-    if (!word.startsWith('-')) return at
-    at += REPO_FLAGS.has(word) ? 2 : 1
+    const redirect = REDIRECT.exec(word)
+    if (redirect !== null) at += redirect[1] === '' ? 2 : 1
+    else if (word.startsWith('-')) at += REPO_FLAGS.has(word) ? 2 : 1
+    else return at
   }
   return -1
-}
-
-function withoutRedirects(words: readonly string[]): string[] {
-  const kept: string[] = []
-  let at = 0
-  while (at < words.length) {
-    const word = words[at] ?? ''
-    const redirect = REDIRECT.exec(word)
-    if (redirect === null) kept.push(word)
-    at += redirect !== null && redirect[1] === '' ? 2 : 1
-  }
-  return kept
 }
 
 // A word the shell expands as a glob (`mer?e`) cannot be read, so it counts.
@@ -125,7 +117,7 @@ function isWord(word: string | undefined, expected: string): boolean {
 }
 
 function runsPrMerge(segment: string): boolean {
-  const words = withoutRedirects(segment.split(/[\s;&|()]+/).filter(word => word !== ''))
+  const words = segment.split(/[\s;&|()]+/).filter(word => word !== '')
   return words.some((word, at) => {
     if (!GH_WORD.test(word)) return false
     const pr = nextWord(words, at + 1)
